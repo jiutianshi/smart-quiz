@@ -1087,23 +1087,6 @@ tbody tr:focus-within td,[aria-selected="true"]>td{background:var(--primary-soft
 .imp-toolbar{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px}
 .imp-toolbar .field{margin:0}
 .imp-toolbar .grow{flex:1 1 16px}
-.imp-split{display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--border);border-radius:12px;overflow:hidden;background:var(--surface)}
-.imp-col{min-width:0}
-.imp-col + .imp-col{border-left:1px solid var(--border)}
-.imp-col-h{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--border);background:var(--surface-2);font-size:12.5px;color:var(--muted)}
-.imp-col-h .grow{flex:1}
-.imp-col-h b{color:var(--text);font-weight:600}
-.imp-col-links{display:flex;gap:12px}
-.imp-col-body{position:relative;padding:14px;min-height:440px}
-.imp-watermark{position:absolute;inset:0;display:grid;place-items:center;font-size:52px;color:var(--border);pointer-events:none;user-select:none;opacity:.55;z-index:0}
-.imp-col-body>*{position:relative;z-index:1}
-.imp-rules{line-height:1.9;margin:0 0 12px}
-.imp-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
-.imp-chips span{font-size:11.5px;color:var(--primary);border:1px solid var(--border);border-radius:6px;padding:3px 8px;background:var(--surface)}
-.imp-text-label{display:block}
-.imp-text{width:100%;min-height:300px;resize:vertical;font-family:ui-monospace,Consolas,monospace;font-size:12px;line-height:1.7}
-.imp-actions{margin-top:10px;flex-wrap:wrap;gap:8px}
-.imp-format-list{font-size:13px;line-height:2;color:var(--muted);padding-left:22px}
-.imp-sample{background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:16px;font-size:12.5px;line-height:1.9;white-space:pre-wrap;overflow:auto}
 html[data-theme="dark"] .imp-upload-btn{color:#101828}
-@media(max-width:900px){.imp-tpl-grid,.imp-split{grid-template-columns:1fr}.imp-col + .imp-col{border-left:0;border-top:1px solid var(--border)}}
+.imp-hidden{display:none}
+@media(max-width:900px){.imp-tpl-grid{grid-template-columns:1fr}}

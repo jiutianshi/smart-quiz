@@ -119,9 +119,10 @@
     return h;
   };
 
-  /* ---------------- 文档导入（v1.12.1：只保留文档导入单页） ----------------
-     按需求去掉「智能导入 / 格式说明」两个标签，把粘贴框、策略下拉、校验并导入、导入报告
-     全部合并进这一个页面。所有既有控件 id 与 data-action 保持不变，导入校验口径不变。 */
+  /* ---------------- 文档导入（v1.12.2：只保留上传与记录） ----------------
+     按需求删除「输入区 / 检查区」左右分栏与表头诊断、导入报告、疑似重复队列的可见区域。
+     所有既有控件 id 与 data-action 移入隐藏容器，供上传解析、程序调用与自测使用；
+     导入结果通过 toast 与「上传记录」呈现，判分与 E001–E010 校验口径不变。 */
   P.import = function (app) {
     const ui = app.ui.imp;
     const banks = Quiz.store.banks();
@@ -144,7 +145,7 @@
       '<div class="imp-tpl-card"><div class="imp-tpl-icon imp-tpl-excel">X</div><h3>Excel 模板导入</h3>' +
         '<ol class="imp-tpl-list">' +
           '<li>首行为填写说明，第二行为表头</li>' +
-          '<li>必填列固定为 type / stem / answer</li>' +
+          '<li>必填列固定为 type / stem / answer，无需填写题目 ID</li>' +
           '<li>答案用 A、C 或 A,C 填写，判断题写 T / F</li>' +
           '<li>支持 .xlsx / .xls（Excel 97-2003 BIFF8）</li>' +
           '<li>支持 CSV / TSV 与从 Excel 表格直接粘贴</li>' +
@@ -157,11 +158,11 @@
       '<input type="file" id="imp-file" data-action="imp-file" accept=".xlsx,.xls,.docx,.doc,.csv,.tsv,.txt">' +
       '<label class="imp-upload-btn" for="imp-file">↑ 上传文件</label>' +
       '<p class="small muted">支持 Word、Excel、CSV / TSV；新旧版二进制文件在本机解析，无需另存为，也无需上传到服务器</p>' +
-      '<p class="small faint">上传后解析结果会自动填入下方输入区，也可直接粘贴 CSV / TSV 内容</p>' +
+      '<p class="small faint">上传后解析结果会自动带入，点「校验并导入」即可入库</p>' +
       '</div>';
-    h += '<p class="small faint imp-foot">新旧格式同时支持：<b>.xlsx / .xls</b>（Excel 97-2003 BIFF）、<b>.docx / .doc</b>（Word 97-2003）、CSV / TSV；旧版二进制文件在本机直接解析，无需另存为，也无需上传到服务器。模板格式兼容考试宝 Excel / Word 模板。表头需含 type / stem / answer；答案写 A、A,C 或 T / F；两行题干完全相同且未填 question_id 会触发 E008。</p>';
+    h += '<p class="small faint imp-foot">新旧格式同时支持：<b>.xlsx / .xls</b>（Excel 97-2003 BIFF）、<b>.docx / .doc</b>（Word 97-2003）、CSV / TSV；旧版二进制文件在本机直接解析，无需另存为，也无需上传到服务器。模板格式兼容考试宝 Excel / Word 模板。表头需含 type / stem / answer；答案写 A、A,C 或 T / F；<b>题目 ID 无需填写</b>，系统自动编号，重复的题目内容会自动去重或跳过。</p>';
 
-    /* ③ 导入策略与校验按钮 */
+    /* ③ 导入策略与导入按钮 */
     h += '<div class="imp-toolbar">' +
       '<label class="field">重复题目策略' + selHtml('imp-policy', 'imp-filter', [{v:'skip',l:'跳过（默认）'},{v:'overwrite',l:'覆盖并升版本'},{v:'new_version',l:'另存新版本'}], ui.policy) + '</label>' +
       '<label class="field">错误处理' + selHtml('imp-skip', 'imp-filter', [{v:'0',l:'整批原子（默认）'},{v:'1',l:'跳过错误行入库'}], ui.skipErrors) + '</label>' +
@@ -170,66 +171,18 @@
       '<button class="btn btn-primary" data-action="import-run">校验并导入</button>' +
       '</div>';
 
-    /* ④ 输入区 / 检查区左右分栏 */
-    h += '<div class="imp-split">' +
-      '<div class="imp-col imp-col-input"><div class="imp-col-h"><b>输入区：</b><span>粘贴内容</span><span class="grow"></span><span class="small faint">核对后再校验</span></div>' +
-        '<div class="imp-col-body"><div class="imp-watermark">输入区</div>' +
-        '<p class="small muted imp-rules">1. 支持 CSV / TSV 表格：表头需含 type、stem、answer<br>2. 也支持「1. 题干… A. 选项… 答案：C」文本，可点「用 AI 解析文本」转成表格<br>3. 粘贴后点右上角「校验并导入」，结果在右侧检查区显示</p>' +
-        '<div class="imp-chips"><span>单选题</span><span>多选题</span><span>判断题</span><span>填空题</span><span>简答题</span><span>案例分析题</span><span>论述题</span><span>计算题</span></div>' +
-        '<label class="field imp-text-label">粘贴内容（CSV / TSV，或从 Excel、Word 表格复制）<textarea id="imp-text" class="imp-text" placeholder="question_id,type,stem,option_a,...">' + esc(ui.text || '') + '</textarea></label>' +
-        '<div class="row imp-actions"><button class="btn btn-sm" data-action="import-review-open">打开文档导入校验页</button>' +
-        '<button class="btn btn-sm" data-action="ai-parse">✦ 用 AI 解析文本</button>' +
-        (ui.report && ui.report.header_diagnosis ? '<button class="btn btn-sm btn-primary" data-action="import-repair">✦ 提取答案并补齐表头</button>' : '') +
-        '</div>' +
-        '<p class="small faint">导入校验页可选表单、选表头行、逐列匹配字段并预览前 8 条；规则解析只认表格。单次最多发送 ' + Quiz.ai.MAX_BLOCK_CHARS + ' 字符，需先在「数据与设置 → AI 模型配置」启用模型。</p>' +
-        '</div></div>';
-    h += '<div class="imp-col imp-col-check"><div class="imp-col-h"><b>检查区：</b><span>分析结果</span><span class="grow"></span><span class="small muted">' +
-      (ui.report ? (ui.report.total + ' 行 · ' + ui.report.failed + ' 个问题') : '等待校验') + '</span></div><div class="imp-col-body">';
-    if (!ui.report && !(ui.review && ui.review.length)) h += '<div class="imp-watermark">检查区</div><div class="empty"><span class="e-icon">▤</span>暂无分析结果，请先粘贴内容或上传文件</div>';
-
-    /* v1.4.1：表头错误单独给醒目诊断 */
-    if (ui.report && ui.report.header_diagnosis) {
-      const d = ui.report.header_diagnosis;
-      const L = {type:'题型 (type)', stem:'题干 (stem)', answer:'正确答案 (answer)'};
-      h += '<section class="card imp-diag"><h2>为什么导入不了 · 表头诊断</h2>' +
-        '<p class="hint">E001 表头校验未通过，整批未入库。必填列固定为：题型 type、题干 stem、正确答案 answer。</p>' +
-        '<div class="report-row"><span>当前表头（' + d.headers.length + ' 列）</span><span class="mono">' + esc(d.headers.join(', ')) + '</span></div>' +
-        '<div class="report-row"><span>缺少必填列</span><b class="imp-diag-bad">' + esc(d.missing.map(k => L[k] || k).join('、') || '无') + '</b></div>' +
-        (d.unknown.length ? '<div class="report-row"><span>未识别的列</span><span class="mono">' + esc(d.unknown.join(', ')) + '</span></div>' : '') +
-        '<div class="report-row"><span>数据行数</span><b>' + d.rows + '</b></div>' +
-        '<p class="small" style="margin:10px 0">常见原因：源文件列名与模板不一致导致题干列被丢弃；或「正确答案：C」写在解析文本里而非独立列。下方按钮可先尝试修复，结果会回填输入框供核对。</p>' +
-        '<div class="row"><button class="btn btn-primary btn-sm" data-action="import-repair">✦ 提取答案并补齐表头</button>' +
-        '<button class="btn btn-sm" data-action="import-review-open">打开文档导入校验页逐列匹配</button>' +
-        '<button class="btn btn-sm" data-action="import-download-xlsx">下载标准 Excel 模板</button></div>' +
-        '<p class="small faint" style="margin:10px 0 0">修复只提取文本里明写的答案，绝不猜测题干。若源文件本身没有题干列，需用校验页把题干所在列映射到 stem，或按模板重填后再导入。</p></section>';
-    }
-    if (ui.report) {
-      const r = ui.report;
-      h += card('导入报告', r.atomic_rollback ? '存在 E 级错误且开启整批原子，已回滚，未写入任何题目' : '批次 ' + esc(ui.batchId || '') + ' 已完成',
-        '<div class="grid g2"><div>' +
-        '<div class="report-row"><span>总行数</span><b>' + r.total + '</b></div>' +
-        '<div class="report-row"><span>入库</span><b style="color:var(--success)">' + r.inserted + '</b></div>' +
-        '<div class="report-row"><span>按 ID 跳过</span><b>' + r.skipped + '</b></div>' +
-        '<div class="report-row"><span>覆盖升版本</span><b>' + (r.overwritten || 0) + '</b></div>' +
-        '<div class="report-row"><span>疑似重复（待确认）</span><b style="color:var(--warn)">' + r.duplicated + '</b></div>' +
-        '<div class="report-row"><span>错误 / 警告</span><b style="color:var(--danger)">' + r.failed + ' / ' + (r.warnings || []).length + '</b></div>' +
-        '</div><div><h3 style="margin-top:0">错误明细</h3>' +
-        (r.errors.concat(r.warnings || []).length ?
-          '<div class="err-list">' + r.errors.concat(r.warnings || []).map(e => '<div class="report-row"><span class="mono">行 ' + e.row + ' · ' + e.field + '</span><span>' + badge(e.code, e.code[0] === 'E' ? 'b-red' : 'b-orange') + ' ' + esc(e.message) + '</span></div>').join('') + '</div>' +
-          '<button class="btn btn-sm" style="margin-top:10px" data-action="import-error-csv">下载错误明细 CSV</button>'
-          : '<div class="small muted">无错误</div>') +
-        '</div></div>');
-    }
-    if (ui.review && ui.review.length) {
-      h += card('疑似重复队列（E009）', '内容指纹与库内题目一致，默认不自动合并；确认后才入库',
-        '<div class="table-wrap"><table><thead><tr><th>CSV 行</th><th>题干</th><th>匹配题目</th><th></th></tr></thead><tbody>' +
-        ui.review.map((x, i) => '<tr><td>' + x.row + '</td><td class="ellip">' + esc(x.question.stem) + '</td><td class="mono">' + esc(x.match_id || '同批次') + '</td><td><button class="btn btn-sm" data-action="import-confirm-review" data-index="' + i + '">确认入库</button></td></tr>').join('') +
-        '</tbody></table></div>');
-    }
-    h += '</div></div></div>';
+    /* ④ 隐藏的功能控件：承接上传解析结果、程序调用与自测，不在页面上展示 */
+    h += '<div class="imp-hidden" style="display:none" aria-hidden="true">' +
+      '<textarea id="imp-text" class="imp-text" placeholder="question_id,type,stem,option_a,...">' + esc(ui.text || '') + '</textarea>' +
+      '<button type="button" data-action="import-review-open">打开文档导入校验页</button>' +
+      '<button type="button" data-action="ai-parse">✦ 用 AI 解析文本</button>' +
+      '<button type="button" data-action="import-repair">✦ 提取答案并补齐表头</button>' +
+      '<button type="button" data-action="import-error-csv">下载错误明细 CSV</button>' +
+      '<button type="button" data-action="import-confirm-review" data-index="0">确认入库</button>' +
+      '</div>';
 
     /* ⑤ 上传记录 */
-    h += '<section class="card imp-history"><h2>上传记录</h2><p class="hint">最近 8 次解析与导入结果</p>' +
+    h += '<section class="card imp-history"><h2>上传记录</h2><p class="hint">最近 8 次解析与导入结果，错误详情可在页面右上角提示中查看</p>' +
       (history.length ? '<div class="table-wrap"><table class="tbl"><thead><tr><th>编号</th><th>文件名称</th><th>上传时间</th><th>文件大小</th><th>状态</th></tr></thead><tbody>' +
         history.map((x, i) => '<tr><td class="mono">' + (i + 1) + '</td><td>' + esc(x.name) + '</td><td class="nowrap">' + esc(x.timeText || fmt(x.time)) + '</td><td class="mono">' + esc(x.sizeText || (x.size + ' B')) + '</td>' +
           '<td><span class="badge ' + (x.ok ? 'b-green' : 'b-red') + '">' + (x.ok ? '解析成功 · 入库 ' + (x.inserted || 0) + ' 题' : '校验未通过 · ' + esc(x.code || 'E001')) + '</span></td></tr>').join('') +

@@ -4,7 +4,7 @@
   const util = Quiz.util;
 
   const COLS = [
-    {key:'question_id', label:'题目ID', required:false, desc:'稳定唯一标识，留空按内容指纹生成；^[A-Za-z0-9_-]{1,64}$'},
+    {key:'question_id', label:'题目ID', required:false, desc:'选填，无需手动编号；留空由系统按行自动生成'},
     {key:'type', label:'题型', required:true, desc:'single / multiple / judge，仅小写'},
     {key:'stem', label:'题干', required:true, desc:'纯题干，trim 后 1–1000 字符'},
     {key:'option_a', label:'选项A', required:false, desc:'单选/多选必填 ≥2；判断题留空'},
@@ -182,7 +182,9 @@
     if (errors.length) return {errors, warnings, question: null};
     const fpInput = {stem, type, options};
     const q = {
-      question_id: idRaw || ('Q-' + util.hash(stem + '|' + type).slice(0, 10)),
+      /* v1.12.2：用户无需给题目单独设 ID；留空时按「题干 + 题型 + 行号」自动生成，
+         同一文件里题干相同的两行也会得到不同 ID，不再触发 E008 整批回滚 */
+      question_id: idRaw || ('Q-' + util.hash(stem + '|' + type + '|' + index).slice(0, 12)),
       type, stem, options,
       answer: parsed.answer, analysis,
       category, tags, difficulty, score,
@@ -280,10 +282,13 @@
       const r = rowToQuestion(row, i + 2);
       errors.push(...r.errors); warnings.push(...r.warnings);
       if (!r.question) return;
-      const id = r.question.question_id;
+      /* v1.12.2：题目 ID 完全由系统负责。万一撞号（例如旧文件手动填了重复编号），
+         自动加后缀继续入库，不再产生 E008、不再整批回滚；内容重复仍由 E009 指纹队列处理。 */
+      let id = r.question.question_id;
       if (seenIds.has(id)) {
-        errors.push({row:i+2, field:'question_id', code:'E008', message: ERRORS.E008});
-        return;
+        let k = 2, next;
+        do { next = id + '-' + k; k++; } while (seenIds.has(next));
+        r.question.question_id = next; id = next;
       }
       seenIds.add(id);
       candidates.push({question: r.question, row: i + 2});
