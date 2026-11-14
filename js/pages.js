@@ -752,7 +752,8 @@
   /* ---------------- 设置 ---------------- */
   P.settings = function (app) {
     const s = Quiz.store.state(), c = s.config;
-    let h = card('判分与学习默认配置', '会话创建时固化配置快照，此处修改不影响历史成绩',
+    let h = '<div class="notice-bar info">题库、导入记录、资料库与全部设置都会实时保存到当前账号；退出或重新登录后自动恢复。数据仅存本机浏览器，换设备请用「导出 JSON / 导入备份」迁移。</div>';
+    h += card('判分与学习默认配置', '会话创建时固化配置快照，此处修改不影响历史成绩',
       '<div class="filters">' +
       '<label class="field">默认反馈时机' + selHtml('cfg-fb', '', [{v:'immediate',l:'逐题即时'},{v:'after_submit',l:'交卷后统一'}], c.feedback_mode) + '</label>' +
       '<label class="field">默认题量<input type="number" id="cfg-count" min="1" max="200" value="' + c.default_question_count + '"></label>' +

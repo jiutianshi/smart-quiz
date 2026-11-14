@@ -11,13 +11,15 @@
   const DIR_KEY = 'smartQuiz.accounts.v1';
   const SESSION_KEY = 'smartQuiz.authSession.v1';
   const DATA_PREFIX = 'smartQuiz.acctData.';
-  /* 所有业务数据键；账号目录 / 账号快照 / 登录会话不在此列 */
+  const IMP_HISTORY_MIGRATED_KEY = 'smartQuiz.impHistoryMigrated.v1';
+  /* 所有业务数据键；账号目录 / 账号快照 / 登录会话不在此列
+     v1.12.5：新增 smartQuiz.importHistory.v1（上传记录也随账号保存，换账号不串扰） */
   const KEYS = [
     'smartQuiz.v1', 'smartQuiz.prefs.v1', 'smartQuiz.runtimeSession.v1',
     'smartQuiz.exams.v1', 'smartQuiz.hubExam.v1', 'smartQuiz.groupIdentity.v1',
     'smartQuiz.groups.v1', 'smartQuiz.lastResetAt.v1', 'smartQuiz.theme.v1',
     'smartQuiz.aiConfig.v1', 'smartQuiz.aiCache.v1', 'smartQuiz.aiUsage.v1',
-    'smartQuiz.library.v1'
+    'smartQuiz.library.v1', 'smartQuiz.importHistory.v1'
   ];
   const S = Quiz.accountGateState = {activeId: '', pendingLegacy: false, err: '', locked: false,
     mode: 'login'};
@@ -53,6 +55,45 @@
     Object.keys(obj || {}).forEach(k => { if (KEYS.indexOf(k) >= 0 && obj[k] != null) set(s, k, String(obj[k])); });
   }
   function hasMainData() { return !!get(LS(), 'smartQuiz.v1'); }
+
+  /* ---------------- v1.12.5 账号数据实时保存 ----------------
+     任何业务数据写入（题库 / 导入记录 / 资料库 / 设置 / 主题 / AI 配置）后 600ms 内合并写入当前账号快照，
+     页面隐藏或关闭时立即落盘。这样「退出登录」不再是保存的前提，刷新、重开、崩溃后重新登录都能取回数据。 */
+  let saveTimer = null, lastSig = '', flushBound = false;
+  function storageSig() {
+    const s = LS(); if (!s) return '';
+    return KEYS.map(k => {
+      const v = get(s, k);
+      return v == null ? '0' : k.slice(9) + ':' + v.length + ':' + v.slice(0, 24);
+    }).join('|');
+  }
+  function saveActive(force) {
+    if (!S.activeId) return false;
+    const sig = storageSig();
+    if (!force && sig === lastSig) return false;
+    writeData(S.activeId, snapshot());
+    lastSig = sig;
+    return true;
+  }
+  function touch() {
+    if (!S.activeId) return;
+    if (saveTimer) return;
+    saveTimer = setTimeout(() => { saveTimer = null; saveActive(false); }, 600);
+  }
+  function flushNow() {
+    if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
+    saveActive(true);
+  }
+  function bindFlush() {
+    if (flushBound) return; flushBound = true;
+    try {
+      global.addEventListener('pagehide', flushNow);
+      global.addEventListener('beforeunload', flushNow);
+      if (global.document) global.document.addEventListener('visibilitychange', () => {
+        if (global.document.visibilityState === 'hidden') flushNow();
+      });
+    } catch (x) {}
+  }
 
   /* ---------------- v1.12.0 管理员 / 账号管理 ----------------
      内置管理员固定为 admin / admin123；其余账号（含注册时间最早的账号）一律为普通用户。
@@ -236,7 +277,18 @@
     d.currentId = id; writeDir(d);
     /* 切换账号时先存回原账号，再恢复目标账号快照；未登录态 activeId 为空，不会误保存 */
     if (S.activeId && S.activeId !== id) writeData(S.activeId, snapshot());
-    restore(readData(id));
+    /* v1.12.5：上传记录此前是全局键，账号快照里没有时把当前存量归入本账号（仅首次迁移一次，
+       之后按账号隔离，切换账号不会把 A 的记录带给 B） */
+    const data = readData(id);
+    if (!get(LS(), IMP_HISTORY_MIGRATED_KEY)) {
+      if (data['smartQuiz.importHistory.v1'] == null) {
+        const live = get(LS(), 'smartQuiz.importHistory.v1');
+        if (live) data['smartQuiz.importHistory.v1'] = live;
+      }
+      set(LS(), IMP_HISTORY_MIGRATED_KEY, '1');
+    }
+    restore(data);
+    lastSig = storageSig();
     set(SS(), SESSION_KEY, id);
     S.activeId = id; S.err = ''; S.locked = false;
     global.__AUTH_GATE_LOCKED__ = false;
@@ -289,11 +341,12 @@
     return S.mode === 'register' ? doRegister(n ? n.value : '', p ? p.value : '') : doLogin(n ? n.value : '', p ? p.value : '');
   }
   function logout() {
+    flushNow();
     if (S.activeId) writeData(S.activeId, snapshot());
     clearActive();
     del(SS(), SESSION_KEY);
     const d = readDir(); d.currentId = ''; writeDir(d);
-    S.activeId = ''; S.err = ''; S.mode = 'login';
+    S.activeId = ''; S.err = ''; S.mode = 'login'; lastSig = '';
     global.__AUTH_GATE_LOCKED__ = true;
     showGate();
     if (!reload() && Quiz.app && Quiz.app.render) Quiz.app.render();
@@ -322,10 +375,12 @@
   function boot() {
     const d = readDir(), ssStore = SS();
     const sid = get(ssStore, SESSION_KEY);
+    bindFlush();
     S.activeId = '';
     /* 已登录（本机会话有效）：直接进入，挂载退出入口 */
     if (sid && d.users.some(u => u.id === sid)) {
       S.activeId = sid; S.locked = false;
+      lastSig = storageSig();
       global.__AUTH_GATE_LOCKED__ = false;
       hideGate();
       mountChip();
@@ -333,10 +388,12 @@
         global.document.addEventListener('DOMContentLoaded', mountChip);
       return {loggedIn: true, id: sid};
     }
-    /* 未登录：先把活动数据存回上次账号，再清空；首次启用保留历史供认领 */
+    /* 未登录：先把活动数据存回上次账号，再清空；首次启用保留历史供认领
+       v1.12.5：有上次账号时不再清空活动键——避免第二个标签页打开即抹掉另一个标签页正在用的数据，
+       登录时 restore() 会整体覆盖，不影响账号隔离 */
     if (d.currentId && hasMainData()) writeData(d.currentId, snapshot());
     S.pendingLegacy = d.users.length === 0 && hasMainData();
-    if (!S.pendingLegacy) clearActive();
+    if (!S.pendingLegacy && !d.currentId) clearActive();
     S.locked = true;
     global.__AUTH_GATE_LOCKED__ = true;
     showGate();
@@ -360,6 +417,7 @@
 
   Quiz.accountGate = {state: S, KEYS, DIR_KEY, SESSION_KEY, DATA_PREFIX, boot, bootResult,
     login, doLogin, doRegister, submit, logout, onAction, snapshot, restore, clearActive, readDir, writeDir, readData, writeData,
+    saveActive, touch, flushNow, storageSig,
     gateHtml, showGate, hideGate, mountChip, userId, currentName, hasMainData,
     users, isAdmin, requireAdmin, updateUser, removeUser, purgeLegacyDemo, ensureAdmin, publicUser,
     BUILTIN_ADMIN_NAME, BUILTIN_ADMIN_PASS, builtinAdminId};

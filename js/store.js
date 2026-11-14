@@ -142,7 +142,12 @@
   }
 
   function save() {
-    try { global.localStorage.setItem(KEY, JSON.stringify(cache)); memoryFallback = false; return true; }
+    /* v1.12.5：任何题库写入都触发账号快照自动保存（未登录态由 accountGate 自行忽略） */
+    try {
+      global.localStorage.setItem(KEY, JSON.stringify(cache)); memoryFallback = false;
+      try { if (Quiz.accountGate && Quiz.accountGate.touch) Quiz.accountGate.touch(); } catch (e2) {}
+      return true;
+    }
     catch (e) { memoryFallback = true; return false; }
   }
 
@@ -206,6 +211,7 @@
         const cur = store.prefs.get();
         Object.assign(cur, patch || {});
         try { global.localStorage.setItem(PREFS_KEY, JSON.stringify(cur)); } catch(e) {}
+        try { if (Quiz.accountGate && Quiz.accountGate.touch) Quiz.accountGate.touch(); } catch(e2) {}
         return cur;
       }
     },

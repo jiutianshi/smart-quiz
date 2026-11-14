@@ -17,7 +17,11 @@
     try { o = JSON.parse((LS() && LS().getItem(KEY)) || '[]'); } catch (x) {}
     return Array.isArray(o) ? o : [];
   }
-  function write(list) { try { LS() && LS().setItem(KEY, JSON.stringify(list)); } catch (x) {} }
+  function write(list) {
+    try { LS() && LS().setItem(KEY, JSON.stringify(list)); } catch (x) {}
+    /* v1.12.5：资料库写入后自动保存到当前账号快照 */
+    try { if (Quiz.accountGate && Quiz.accountGate.touch) Quiz.accountGate.touch(); } catch (x) {}
+  }
   function owner() { return (gate && gate.state && gate.state.activeId) || 'local'; }
   function ownerName() { return (gate && gate.currentName && gate.currentName()) || '本机用户'; }
   function isAdmin() { return !!(gate && gate.isAdmin && gate.isAdmin()); }

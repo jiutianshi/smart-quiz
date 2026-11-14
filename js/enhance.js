@@ -120,6 +120,8 @@
   function setTheme(mode) {
     if (['light', 'dark', 'system'].indexOf(mode) < 0) return readTheme();
     try { global.localStorage.setItem(THEME_KEY, mode); } catch (e) { /* ignore */ }
+    /* v1.12.5：主题偏好随账号自动保存 */
+    try { if (Quiz.accountGate && Quiz.accountGate.touch) Quiz.accountGate.touch(); } catch (e2) {}
     applyTheme(mode);
     return mode;
   }

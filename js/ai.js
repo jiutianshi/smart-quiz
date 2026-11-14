@@ -37,7 +37,12 @@
     catch (e) { return fallback; }
   }
   function lsSet(key, obj) {
-    try { global.localStorage.setItem(key, JSON.stringify(obj)); return true; }
+    try {
+      global.localStorage.setItem(key, JSON.stringify(obj));
+      /* v1.12.5：AI 配置 / 缓存 / 用量随账号自动保存 */
+      try { if (Quiz.accountGate && Quiz.accountGate.touch) Quiz.accountGate.touch(); } catch (e2) {}
+      return true;
+    }
     catch (e) { return false; }
   }
   function lsDel(key) { try { global.localStorage.removeItem(key); } catch (e) {} }

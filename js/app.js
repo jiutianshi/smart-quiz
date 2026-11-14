@@ -107,6 +107,7 @@
     }
     if (pref.bankId && (pref.bankId === Quiz.ALL_BANKS || store.bank(pref.bankId))) app.ui.bank.bankId = pref.bankId;
     else app.ui.bank.bankId = store.defaultBankId();
+    if (pref.resultFilter) app.ui.resultFilter = pref.resultFilter;
     if (pref.impBankId && store.bank(pref.impBankId)) app.ui.imp.bankId = pref.impBankId;
     else app.ui.imp.bankId = store.defaultBankId();
     // v0.8 答题设置：有偏好读偏好，无偏好从既有 config 初始化（不重置用户原有设置）
@@ -188,7 +189,8 @@
                  order:p.order, feedback_mode:p.feedback_mode, partial_mode:p.partial_mode,
                  allow_partial_with_wrong:p.allow_partial_with_wrong, quota_mode:p.quota_mode,
                  quota:Object.assign({}, p.quota), shuffle_options:p.shuffle_options, auto_advance:p.auto_advance},
-      imp: {policy:app.ui.imp.policy, skipErrors:app.ui.imp.skipErrors}
+      imp: {policy:app.ui.imp.policy, skipErrors:app.ui.imp.skipErrors, mode:app.ui.imp.mode},
+      resultFilter: app.ui.resultFilter
     });
   }
   app.savePrefs = savePrefs;
@@ -355,6 +357,8 @@
     $('storage-dot').className = 'dot' + (store.isFallback() ? ' bad' : '');
     $('storage-text').textContent = store.isFallback() ? '内存模式（请导出备份）' : '数据已保存';
     if (route === 'practice' && app.practice && !app.practice.finished) startTimer();
+    /* v1.12.5：每次渲染后合并触发账号快照自动保存，覆盖群组 / 考试 / 导入记录等各模块写入 */
+    try { if (Quiz.accountGate && Quiz.accountGate.touch) Quiz.accountGate.touch(); } catch (e) {}
     window.scrollTo({top:0, behavior:'auto'});
   }
   app.render = render;
@@ -644,6 +648,8 @@
   function pushImportHistory(rec) {
     const a = importHistory(); a.unshift(rec);
     try { global.localStorage.setItem(IMP_HISTORY_KEY, JSON.stringify(a.slice(0, 8))); } catch (x) {}
+    /* v1.12.5：上传记录已纳入账号业务键，写入后立刻并入当前账号快照 */
+    try { if (Quiz.accountGate && Quiz.accountGate.touch) Quiz.accountGate.touch(); } catch (x) {}
   }
   app.importHistory = importHistory;
   app.pushImportHistory = pushImportHistory;
@@ -1028,7 +1034,7 @@
         go('examHistory'); toast('考试已创建（仅保存在本机）', 'ok'); break;
       }
       case 'ai-go-settings': closeModal(); go('settings'); break;
-      case 'imp-mode': app.ui.imp.mode = el.dataset.mode === 'ai' ? 'ai' : 'doc'; render(); break;
+      case 'imp-mode': app.ui.imp.mode = el.dataset.mode === 'ai' ? 'ai' : 'doc'; savePrefs(); render(); break;
       /* v1.12.4：继续添加 —— 锁定上次导入的目标题库，后续导入不再新建题库 */
       case 'imp-continue-add': {
         const lr = app.ui.imp.lastResult;
@@ -1437,7 +1443,7 @@
       app.ui.theme = enhance.setTheme(el.value);
       render(); toast('主题已切换', 'ok'); return;
     }
-    if (a === 'result-filter') { app.ui.resultFilter = el.value; render(); return; }
+    if (a === 'result-filter') { app.ui.resultFilter = el.value; savePrefs(); render(); return; }
     if (a === 'imp-file') { readImportFile(e.target.files[0]); return; }
     if (a === 'imp-ai-file') { readAiImportFile(e.target.files[0]); return; }
     if (a === 'settings-file') {
