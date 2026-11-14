@@ -185,7 +185,7 @@
       modal('合并题库',
         formRow('源题库（题目移出后删除该题库）', sel('bo-src', banks.map(x => x.name), banks[0] && banks[0].name)) +
         formRow('目标题库', sel('bo-dst', banks.map(x => x.name), banks[0] && banks[0].name)) +
-        '<p class="small faint">默认题库不会被删除，只移出题目。</p>',
+        '<p class="small faint">题目不会被删除，只会移出该题库。</p>',
         foot('合并', 'bo-merge-save', '')); return;
     }
   }
@@ -288,8 +288,8 @@
       const b = store.bank(id);
       if (!b) return true;
       if (b.is_default) { toast('默认题库不可删除', 'err'); return true; }
-      if (!global.confirm || !global.confirm('删除题库「' + b.name + '」？题目会全部迁回默认题库，不会丢失。')) return true;
-      store.removeBank(id); S.openRow = ''; render(); toast('已删除题库，题目已迁回默认题库', 'ok'); return true;
+      if (!global.confirm || !global.confirm('删除题库「' + b.name + '」？题目会变为未分类，不会丢失。')) return true;
+      store.removeBank(id); S.openRow = ''; render(); toast('已删除题库，题目已变为未分类', 'ok'); return true;
     }
     if (a === 'bo-merge-save') {
       const banks = store.banks(), src = banks.find(x => x.name === v('bo-src')), dst = banks.find(x => x.name === v('bo-dst'));

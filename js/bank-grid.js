@@ -28,7 +28,7 @@
     renderNow();
   }
   function ask(msg) { return !(global.confirm && !global.confirm(msg)); }
-  function bankName(id) { const b = store.bank(id); return b ? b.name : '默认题库'; }
+  function bankName(id) { const b = store.bank(id); return b ? b.name : '未分类题库'; }
   function safeBank(id) {
     return (id && id !== Quiz.ALL_BANKS && store.bank(id)) ? id : store.defaultBankId();
   }

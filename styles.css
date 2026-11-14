@@ -1063,3 +1063,59 @@ tbody tr:focus-within td,[aria-selected="true"]>td{background:var(--primary-soft
 
 /* 表格行状态延续 v1.10.0 覆盖层 */
 .tbl tbody tr:hover td{background:var(--surface-2)}
+
+/* ==================== v1.12.0 文档导入页（参考图排版） ==================== */
+.imp-shell{max-width:1280px}
+.imp-notice{background:var(--warn-soft);border:1px solid var(--border);border-radius:8px;padding:10px 14px;font-size:12.5px;color:var(--muted);margin-bottom:16px}
+.imp-tabs>input[type=radio]{position:absolute;opacity:0;pointer-events:none;width:0;height:0}
+.imp-tabbar{display:flex;align-items:center;gap:4px;border-bottom:1px solid var(--border);margin-bottom:16px}
+.imp-tabbar .imp-tab{padding:9px 18px;font-size:13px;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;border-radius:0}
+.imp-tabbar .imp-tab:hover{color:var(--primary)}
+#imp-tab-doc:checked ~ .imp-tabbar label[for="imp-tab-doc"],
+#imp-tab-smart:checked ~ .imp-tabbar label[for="imp-tab-smart"],
+#imp-tab-format:checked ~ .imp-tabbar label[for="imp-tab-format"]{color:var(--primary);border-bottom-color:var(--primary);font-weight:600}
+.imp-tab-note{margin-left:auto;font-size:12px;color:var(--faint)}
+.imp-panes>.imp-pane{display:none}
+#imp-tab-doc:checked ~ .imp-panes .imp-pane-doc,
+#imp-tab-smart:checked ~ .imp-panes .imp-pane-smart,
+#imp-tab-format:checked ~ .imp-panes .imp-pane-format{display:block}
+.imp-warn{color:var(--danger);font-size:13px;text-align:center;margin:0 0 16px}
+.imp-tpl-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+.imp-tpl-card{border:1px solid var(--border);border-radius:12px;background:var(--surface);padding:20px 24px 24px;text-align:center}
+.imp-tpl-card h3{margin:8px 0 14px;font-size:14px;font-weight:600;color:var(--text)}
+.imp-tpl-icon,.imp-ficon{display:inline-grid;place-items:center;width:40px;height:40px;border-radius:8px;color:#fff;font-size:18px;font-weight:600}
+.imp-tpl-word,.imp-ficon-word{background:#2b579a}
+.imp-tpl-excel,.imp-ficon-excel{background:#217346}
+.imp-ficon-text{background:var(--primary)}
+.imp-tpl-list{text-align:left;margin:0 0 16px;padding-left:20px;font-size:12.5px;line-height:1.9;color:var(--muted)}
+.imp-drop{border:1px dashed var(--primary);border-radius:12px;background:var(--surface-2);padding:20px 16px;text-align:center;margin-bottom:12px}
+.imp-drop-icons{display:flex;justify-content:center;gap:8px;margin-bottom:10px}
+.imp-drop #imp-file{position:absolute;opacity:0;width:0;height:0;pointer-events:none}
+.imp-upload-btn{display:inline-block;background:var(--primary);color:#fff;border-radius:8px;padding:8px 22px;font-size:13px;cursor:pointer;margin-bottom:8px}
+.imp-upload-btn:hover{filter:brightness(1.06)}
+.imp-drop .link{display:inline-block;margin-top:6px;font-size:12.5px}
+.imp-foot{margin:0 0 16px}
+.imp-history .tbl{font-size:12.5px}
+.imp-toolbar{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px}
+.imp-toolbar .field{margin:0}
+.imp-toolbar .grow{flex:1 1 16px}
+.imp-split{display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--border);border-radius:12px;overflow:hidden;background:var(--surface)}
+.imp-col{min-width:0}
+.imp-col + .imp-col{border-left:1px solid var(--border)}
+.imp-col-h{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--border);background:var(--surface-2);font-size:12.5px;color:var(--muted)}
+.imp-col-h .grow{flex:1}
+.imp-col-h b{color:var(--text);font-weight:600}
+.imp-col-links{display:flex;gap:12px}
+.imp-col-body{position:relative;padding:14px;min-height:440px}
+.imp-watermark{position:absolute;inset:0;display:grid;place-items:center;font-size:52px;color:var(--border);pointer-events:none;user-select:none;opacity:.55;z-index:0}
+.imp-col-body>*{position:relative;z-index:1}
+.imp-rules{line-height:1.9;margin:0 0 12px}
+.imp-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+.imp-chips span{font-size:11.5px;color:var(--primary);border:1px solid var(--border);border-radius:6px;padding:3px 8px;background:var(--surface)}
+.imp-text-label{display:block}
+.imp-text{width:100%;min-height:300px;resize:vertical;font-family:ui-monospace,Consolas,monospace;font-size:12px;line-height:1.7}
+.imp-actions{margin-top:10px;flex-wrap:wrap;gap:8px}
+.imp-format-list{font-size:13px;line-height:2;color:var(--muted);padding-left:22px}
+.imp-sample{background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:16px;font-size:12.5px;line-height:1.9;white-space:pre-wrap;overflow:auto}
+html[data-theme="dark"] .imp-upload-btn{color:#101828}
+@media(max-width:900px){.imp-tpl-grid,.imp-split{grid-template-columns:1fr}.imp-col + .imp-col{border-left:0;border-top:1px solid var(--border)}.imp-tab-note{display:none}}

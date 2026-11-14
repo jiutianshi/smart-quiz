@@ -29,7 +29,7 @@
   function bankName() {
     parseBank();
     const b = S.bankId && store.bank && store.bank(S.bankId);
-    return (b && b.name) || '默认题库';
+    return (b && b.name) || '未分类题库';
   }
   function bankQuestions() {
     parseBank();

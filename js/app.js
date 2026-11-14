@@ -62,7 +62,9 @@
     result: null,
     ui: {
       stats: {range:'all', category:'', type:''},
-      imp: {policy:'skip', skipErrors:'0', text:'', report:null, review:[], batchId:'', bankId: Quiz.DEFAULT_BANK_ID},
+      /* v1.12.0：tab 记住文档导入页当前标签；上传记录存独立键，不进账号业务 KEYS */
+      imp: {policy:'skip', skipErrors:'0', text:'', report:null, review:[], batchId:'', bankId: Quiz.DEFAULT_BANK_ID,
+        tab:'doc', lastFileName:'', lastFileSize:0},
       bank: {kw:'', category:'', type:'', difficulty:'', status:'', tag:'', page:1, bankId: Quiz.DEFAULT_BANK_ID},
       /* v1.3.3 文档导入校验页：只存上次选择的源文件（内存），不进备份 */
       importReview: {file:null, fileName:''},
@@ -184,7 +186,7 @@
                  order:p.order, feedback_mode:p.feedback_mode, partial_mode:p.partial_mode,
                  allow_partial_with_wrong:p.allow_partial_with_wrong, quota_mode:p.quota_mode,
                  quota:Object.assign({}, p.quota), shuffle_options:p.shuffle_options, auto_advance:p.auto_advance},
-      imp: {policy:app.ui.imp.policy, skipErrors:app.ui.imp.skipErrors}
+      imp: {policy:app.ui.imp.policy, skipErrors:app.ui.imp.skipErrors, tab:app.ui.imp.tab}
     });
   }
   app.savePrefs = savePrefs;
@@ -631,6 +633,19 @@
   }
 
   /* ---------- 导入 ---------- */
+  /* v1.12.0：上传记录（参考图的「上传记录」表），独立键持久化最近 8 条，不随账号切换清空 */
+  const IMP_HISTORY_KEY = 'smartQuiz.importHistory.v1';
+  function importHistory() {
+    try { const a = JSON.parse(global.localStorage.getItem(IMP_HISTORY_KEY) || '[]'); return Array.isArray(a) ? a : []; }
+    catch (x) { return []; }
+  }
+  function pushImportHistory(rec) {
+    const a = importHistory(); a.unshift(rec);
+    try { global.localStorage.setItem(IMP_HISTORY_KEY, JSON.stringify(a.slice(0, 8))); } catch (x) {}
+  }
+  app.importHistory = importHistory;
+  app.pushImportHistory = pushImportHistory;
+
   function doImport(textOverride, optsOverride) {
     /* v1.3.3：校验页确认时传入已匹配的 CSV 与导入页已保存的策略，复用同一条入库链 */
     const text = textOverride != null ? textOverride : val('imp-text');
@@ -644,6 +659,14 @@
     app.ui.imp.report = r.report;
     app.ui.imp.review = r.reviewQueue;
     app.ui.imp.batchId = util.uid('IMP');
+    const err0 = (r.report.errors || [])[0];
+    pushImportHistory({
+      name: app.ui.imp.lastFileName || '粘贴内容',
+      time: util.now(), timeText: new Date().toLocaleString('zh-CN', {hour12:false}),
+      size: app.ui.imp.lastFileSize || text.length,
+      sizeText: app.ui.imp.lastFileSize ? (app.ui.imp.lastFileSize / 1024).toFixed(1) + ' KB' : text.length + ' B',
+      ok: !r.report.atomic_rollback, inserted: r.valid.length, code: err0 ? err0.code : ''
+    });
     const targetBank = app.ui.imp.bankId;
     r.valid.forEach(q => { q.bank_id = targetBank; });
     r.reviewQueue.forEach(item => { if (item.question) item.question.bank_id = targetBank; });
@@ -668,6 +691,8 @@
     /* v1.3.2：统一按文件内容分流，扩展名只作为兜底提示；
        修复「二进制 .xls 改名为 .xlsx」「HTML 表格另存为 .xls」等错配导致的解析失败 */
     const named = Quiz.office.detect(file.name);
+    app.ui.imp.lastFileName = file.name;
+    app.ui.imp.lastFileSize = file.size || 0;
     toast('正在本地解析 ' + file.name + (named === 'legacy' ? '（旧版格式）' : '') + ' …');
     try {
       const text = await Quiz.office.readAuto(file, file.name);
@@ -676,6 +701,9 @@
       app.ui.imp.text = text;
       app.ui.importReview.file = file;
       app.ui.importReview.fileName = file.name;
+      /* v1.12.0：解析完成后自动切到「智能导入」，让用户立即看到输入区内容 */
+      app.ui.imp.tab = 'smart';
+      const rt = $('imp-tab-smart'); if (rt) rt.checked = true;
       if (named === 'text') toast('已载入 ' + file.name + '，请核对后点击「校验并导入」', 'ok');
       else toast('已解析 ' + file.name + '（' + Math.max(0, text.split('\n').length - 1) + ' 行数据）' + (note ? '；' + note : '') + '，请核对后点击「校验并导入」', 'ok');
     } catch (e) {
@@ -707,7 +735,7 @@
   function openQuestionForm(id) {
     app.editingId = id || null;
     const q = id ? store.question(id) : {bank_id: app.formBankId()};
-    modal(id ? '编辑题目 · ' + id : '新增题目 · ' + (store.bank(q.bank_id) || {name:'默认题库'}).name, Quiz.pages.questionForm(q),
+    modal(id ? '编辑题目 · ' + id : '新增题目 · ' + (store.bank(q.bank_id) || {name:'未分类题库'}).name, Quiz.pages.questionForm(q),
       '<button class="btn" data-action="close-modal">取消</button><button class="btn btn-primary" data-action="question-save">保存题目</button>');
   }
   function refreshQuestionForm() {
@@ -1077,10 +1105,10 @@
         const rid = app.currentBankId(), rb = store.bank(rid);
         if (!rb || rb.is_default) { toast('默认题库不可删除', 'err'); break; }
         const n = store.questionCount(rid);
-        if (!confirm('删除题库「' + rb.name + '」？其中 ' + n + ' 道题将迁回默认题库，题目与历史记录不会丢失。')) break;
+        if (!confirm('删除题库「' + rb.name + '」？其中 ' + n + ' 道题将变为未分类，题目与历史记录不会丢失。')) break;
         store.removeBank(rid);
         app.ui.bank.bankId = store.defaultBankId(); app.ui.bank.page = 1;
-        savePrefs(); render(); toast('题库已删除，' + n + ' 题迁回默认题库', 'ok'); break;
+        savePrefs(); render(); toast('题库已删除，' + n + ' 题已变为未分类', 'ok'); break;
       }
       case 'bank-move': {
         const ids = Array.from(document.querySelectorAll('.bank-ck:checked')).map(x => x.value);
@@ -1242,6 +1270,11 @@
   });
 
   document.addEventListener('change', function (e) {
+    /* v1.12.0：文档导入页标签 radio 自行切换，不重绘，避免丢失已粘贴的内容 */
+    if (e.target && e.target.name === 'imp-tab') {
+      app.ui.imp.tab = (e.target.dataset && e.target.dataset.tab) || 'doc';
+      return;
+    }
     /* 选项选中态高亮（不改变任何判分逻辑） */
     if (e.target && e.target.name === 'answer') {
       try {
@@ -1390,7 +1423,8 @@
     if (Quiz.purgeDemo) Quiz.purgeDemo();
     if (Quiz.accountGate && Quiz.accountGate.purgeLegacyDemo) Quiz.accountGate.purgeLegacyDemo();
   }
-  if (Quiz.accountGate && Quiz.accountGate.ensureAdmin) Quiz.accountGate.ensureAdmin();
+  /* v1.12.0：仅真实站点注入内置管理员并撤销历史误授的管理员；Node 自测不改动账号目录 */
+  if (global.__BUILTIN_ADMIN__ && Quiz.accountGate && Quiz.accountGate.ensureAdmin) Quiz.accountGate.ensureAdmin();
   restorePrefs();
   render();
 })(typeof window !== 'undefined' ? window : globalThis);

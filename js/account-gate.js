@@ -1,6 +1,6 @@
-/* v1.11.0 账号 + 密码登录 / 注册 + 管理员体系（纯增量）
+/* v1.12.0 账号 + 密码登录 / 注册 + 内置管理员体系（纯增量）
    进入页面强制登录：本地账号门（账号 + 密码），新账号即注册、已注册则登录。
-   首个注册的账号自动成为管理员，可管理所有注册账号与下发全站通知。
+   内置管理员账号 admin / admin123 可管理所有注册账号与下发全站通知；其余账号均为普通用户。
    每个账号的题库 / 练习记录 / 群组 / 资料 / 设置按账号隔离保存（本机隔离，非服务端多租户）。
    数据仅存本机浏览器，跨设备请用「导出 JSON / 导入备份」迁移；
    未登录态底层不加载任何用户数据（__AUTH_GATE_LOCKED__ 拦截 seedIfEmpty）。 */
@@ -54,7 +54,13 @@
   }
   function hasMainData() { return !!get(LS(), 'smartQuiz.v1'); }
 
-  /* ---------------- v1.11.0 管理员 / 账号管理 ---------------- */
+  /* ---------------- v1.12.0 管理员 / 账号管理 ----------------
+     内置管理员固定为 admin / admin123；其余账号（含注册时间最早的账号）一律为普通用户。
+     管理员仍可通过后台手动把某个账号设为管理员，但注册本身永不授予管理员权限。 */
+  const BUILTIN_ADMIN_NAME = 'admin';
+  const BUILTIN_ADMIN_PASS = 'admin123';
+  const ADMIN_MIGRATED_KEY = 'smartQuiz.builtinAdmin.v1';
+  function builtinAdminId() { return userId(BUILTIN_ADMIN_NAME); }
   function publicUser(u) {
     return {id: u.id, name: u.name, isAdmin: !!u.isAdmin, disabled: !!u.disabled,
       createdAt: u.createdAt || 0, lastLoginAt: u.lastLoginAt || 0};
@@ -69,11 +75,16 @@
     if (!isAdmin()) return {ok: false, msg: '仅管理员可执行此操作'};
     return null;
   }
-  /* 只允许管理员改账号；不可删除自己的管理员身份或删除自己 */
+  /* 只允许管理员改账号；不可删除自己的管理员身份或删除自己；内置管理员受保护 */
   function updateUser(id, patch) {
     const denied = requireAdmin(); if (denied) return denied;
     const d = readDir(), u = d.users.filter(x => x.id === id)[0];
     if (!u) return {ok: false, msg: '账号不存在'};
+    const isBuiltin = id === builtinAdminId();
+    if (isBuiltin && typeof patch.name === 'string' && String(patch.name).trim().toLowerCase() !== BUILTIN_ADMIN_NAME)
+      return {ok: false, msg: '内置管理员账号不可改名'};
+    if (isBuiltin && patch.isAdmin === false) return {ok: false, msg: '内置管理员不可取消管理员身份'};
+    if (isBuiltin && patch.disabled === true) return {ok: false, msg: '内置管理员不可停用'};
     if (typeof patch.name === 'string') {
       const n = String(patch.name).trim().slice(0, 24);
       if (!n) return {ok: false, msg: '账号不能为空'};
@@ -98,6 +109,7 @@
   }
   function removeUser(id) {
     const denied = requireAdmin(); if (denied) return denied;
+    if (id === builtinAdminId()) return {ok: false, msg: '内置管理员账号不可删除'};
     if (id === S.activeId) return {ok: false, msg: '不能删除当前登录的账号'};
     const d = readDir();
     if (!d.users.some(x => x.id === id)) return {ok: false, msg: '账号不存在'};
@@ -106,15 +118,27 @@
     del(LS(), dataKey(id));
     return {ok: true};
   }
-  /* v1.11.0：已有账号目录若无管理员，把最早注册的账号升为管理员（一次性迁移） */
+  /* v1.12.0：注入内置管理员 admin / admin123，并一次性撤销历史账号被误授予的管理员身份。
+     只在真实站点由 app.js 启动调用（__BUILTIN_ADMIN__），Node 自测不改动账号目录。 */
   function ensureAdmin() {
-    const d = readDir();
-    if (!d.users.length) return false;
-    if (d.users.some(u => u.isAdmin)) return false;
-    const first = d.users.slice().sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0))[0] || d.users[0];
-    first.isAdmin = true;
+    const d = readDir(), aid = builtinAdminId();
+    const migrated = !get(LS(), ADMIN_MIGRATED_KEY);
+    let a = d.users.filter(u => u.id === aid || String(u.name).toLowerCase() === BUILTIN_ADMIN_NAME)[0];
+    if (!a) {
+      a = {id: aid, name: BUILTIN_ADMIN_NAME, passHash: util.hash(BUILTIN_ADMIN_PASS),
+        createdAt: util.now(), isAdmin: true, disabled: false};
+      d.users.unshift(a);
+    } else {
+      a.id = aid; a.name = BUILTIN_ADMIN_NAME;
+      if (migrated) a.passHash = util.hash(BUILTIN_ADMIN_PASS);
+      a.isAdmin = true; a.disabled = false;
+    }
+    if (migrated) {
+      d.users.forEach(u => { if (u !== a) u.isAdmin = false; });
+      set(LS(), ADMIN_MIGRATED_KEY, '1');
+    }
     writeDir(d);
-    return true;
+    return migrated;
   }
   /* 一次性清理历史遗留的内置示例题（含各账号快照），不触碰用户自建题目 */
   function purgeLegacyDemo() {
@@ -240,12 +264,13 @@
     if (!n) { S.err = '请输入账号'; showGate(); return {ok: false, msg: S.err}; }
     if (!p) { S.err = '请设置密码'; showGate(); return {ok: false, msg: S.err}; }
     if (p.length < 4) { S.err = '密码至少 4 位'; showGate(); return {ok: false, msg: S.err}; }
+    if (n.toLowerCase() === BUILTIN_ADMIN_NAME) { S.err = '该账号为保留账号，请直接登录'; S.mode = 'login'; showGate(); return {ok: false, msg: S.err}; }
     const d = readDir();
     const id = userId(n);
     if (d.users.some(x => x.id === id)) { S.err = '该账号已注册，请登录'; S.mode = 'login'; showGate(); return {ok: false, msg: S.err}; }
-    /* v1.11.0：首个注册的账号自动成为管理员 */
+    /* v1.12.0：新注册账号一律为用户模式，只有内置 admin 是管理员 */
     const u = {id, name: n, passHash: util.hash(p), createdAt: util.now(),
-      isAdmin: d.users.length === 0, disabled: false};
+      isAdmin: false, disabled: false};
     d.users.push(u); writeDir(d);
     /* 首次注册：有历史数据则归入该账号，否则给一份干净的空空间 */
     writeData(id, S.pendingLegacy ? snapshot() : {});
@@ -336,6 +361,7 @@
   Quiz.accountGate = {state: S, KEYS, DIR_KEY, SESSION_KEY, DATA_PREFIX, boot, bootResult,
     login, doLogin, doRegister, submit, logout, onAction, snapshot, restore, clearActive, readDir, writeDir, readData, writeData,
     gateHtml, showGate, hideGate, mountChip, userId, currentName, hasMainData,
-    users, isAdmin, requireAdmin, updateUser, removeUser, purgeLegacyDemo, ensureAdmin, publicUser};
+    users, isAdmin, requireAdmin, updateUser, removeUser, purgeLegacyDemo, ensureAdmin, publicUser,
+    BUILTIN_ADMIN_NAME, BUILTIN_ADMIN_PASS, builtinAdminId};
   if (typeof module !== 'undefined' && module.exports) module.exports = Quiz.accountGate;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -75,7 +75,8 @@
   function emptyState() {
     return {
       version: 3,
-      banks: defaultBanks(),
+      /* v1.12.0：真实站点不再预置默认题库；Node 自测保留原有默认库造数据 */
+      banks: global.__NO_DEMO_DATA__ ? [] : defaultBanks(),
       questions: [], sessions: [], records: [], wrong: [],
       folders: [{folder_id: 'F_DEFAULT', name: '全部收藏', is_default: true, created_at: now()}],
       favorites: [],
@@ -108,6 +109,22 @@
 
   /* 兼容旧备份/旧数据：补齐题库实体、默认库，并把无归属或指向已删库的题目归到默认库 */
   function normalizeBanks(s) {
+    /* v1.12.0：真实站点删除默认题库。每次读 / 写都会剔除 is_default 与 B_DEFAULT，
+       并把指向已删题库的题目改为「未分类」（bank_id 为空串），题目本身不丢失。 */
+    if (global.__NO_DEMO_DATA__) {
+      if (!Array.isArray(s.banks)) s.banks = [];
+      const seen = new Set();
+      s.banks = s.banks.filter(b => {
+        if (!b || !b.bank_id || b.is_default || b.bank_id === DEFAULT_BANK_ID || seen.has(b.bank_id)) return false;
+        seen.add(b.bank_id);
+        return true;
+      });
+      const valid = new Set(s.banks.map(b => b.bank_id));
+      (Array.isArray(s.questions) ? s.questions : []).forEach(q => {
+        if (!valid.has(q.bank_id)) q.bank_id = '';
+      });
+      return s;
+    }
     if (!Array.isArray(s.banks) || !s.banks.length) s.banks = defaultBanks();
     const seen = new Set();
     s.banks = s.banks.filter(b => {
@@ -195,7 +212,7 @@
     /* ---------- 题库（一级实体） ---------- */
     banks() { return read().banks.slice(); },
     bank(id) { return read().banks.find(b => b.bank_id === id) || null; },
-    defaultBankId() { const b = read().banks.find(x => x.is_default); return b ? b.bank_id : DEFAULT_BANK_ID; },
+    defaultBankId() { const b = read().banks.find(x => x.is_default); return b ? b.bank_id : (global.__NO_DEMO_DATA__ ? '' : DEFAULT_BANK_ID); },
     questionCount(bankId) {
       const qs = read().questions;
       return bankId === ALL_BANKS ? qs.length : qs.filter(q => q.bank_id === bankId).length;
@@ -225,7 +242,7 @@
         const b = s.banks.find(x => x.bank_id === id);
         if (!b || b.is_default) return false;
         const def = s.banks.find(x => x.is_default);
-        const target = def ? def.bank_id : DEFAULT_BANK_ID;
+        const target = def ? def.bank_id : (global.__NO_DEMO_DATA__ ? '' : DEFAULT_BANK_ID);
         s.questions.forEach(q => { if (q.bank_id === id) { q.bank_id = target; q.updated_at = now(); } });
         s.banks = s.banks.filter(x => x.bank_id !== id);
         return true;

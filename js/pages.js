@@ -119,30 +119,88 @@
     return h;
   };
 
-  /* ---------------- 文档导入 ---------------- */
+  /* ---------------- 文档导入（v1.12.0 参考图重排） ----------------
+     三个标签：文档导入（模板双卡 + 上传区 + 上传记录）、智能导入（输入区 / 检查区左右分栏）、格式说明。
+     按需求不提供「人工导入」（逐题录入表单）。所有既有控件 id 与 data-action 保持不变。 */
   P.import = function (app) {
     const ui = app.ui.imp;
+    const tab = ui.tab || 'doc';
+    const banks = Quiz.store.banks();
+    const history = (app.importHistory && app.importHistory()) || [];
+    const radio = (key) => '<input type="radio" name="imp-tab" id="imp-tab-' + key + '" data-tab="' + key + '"' + (tab === key ? ' checked' : '') + '>';
 
-    let h = card('标准导入模板', '考试宝 Excel / Word 模板：Excel 首行为填写说明、第二行为表头；Word 按题号 / 选项 / 答案分行书写',
-      '<div class="row" style="margin-bottom:12px">' +
-      '<button class="btn btn-primary btn-sm" data-action="import-download-xlsx">下载 Excel 模板</button>' +
-      '<button class="btn btn-sm" data-action="import-download-docx">下载 Word 模板</button></div>' +
-      '<p class="small muted" style="margin:0">模板内已含填写说明与示例题。支持中文表头、章节、难度与最多 8 个选项；仅单选 / 多选 / 判断可入库，填空题、问答题等自动跳过并在解析时提示。也支持 CSV / TSV 与从 Excel / Word 表格直接粘贴。</p>' +
-      '<p class="small faint" style="margin:8px 0 0">新旧格式同时支持：<b>.xlsx / .xls</b>（Excel 97-2003 BIFF）、<b>.docx / .doc</b>（Word 97-2003）、CSV / TSV；旧版二进制文件在本机直接解析，无需另存为，也无需上传到服务器。</p>');
+    let h = '<div class="imp-shell">';
+    h += '<div class="imp-notice">请先下载标准模板并按模板填写；文件仅在本机解析，不会上传到服务器。</div>';
+    h += '<div class="imp-tabs">' + radio('doc') + radio('smart') + radio('format') +
+      '<div class="imp-tabbar">' +
+        '<label class="imp-tab" for="imp-tab-doc">文档导入</label>' +
+        '<label class="imp-tab" for="imp-tab-smart">智能导入</label>' +
+        '<label class="imp-tab" for="imp-tab-format">格式说明</label>' +
+        '<span class="imp-tab-note">标准模板 · 字段校验与去重入库</span>' +
+      '</div><div class="imp-panes">';
 
-    h += card('导入数据', 'Excel / Word 在本地解析为 CSV 后填入输入框供核对；默认整批原子，指纹重复进人工确认队列',
-      '<div class="filters">' +
+    /* ---------- Tab 1：文档导入（模板双卡 + 上传区 + 上传记录） ---------- */
+    h += '<div class="imp-pane imp-pane-doc">';
+    h += '<p class="imp-warn">请先下载标准模板，参考模板填写试题，然后进行上传</p>';
+    h += '<div class="imp-tpl-grid">' +
+      '<div class="imp-tpl-card"><div class="imp-tpl-icon imp-tpl-word">W</div><h3>Word 模板导入</h3>' +
+        '<ol class="imp-tpl-list">' +
+          '<li>请使用 .docx / .doc 文件，按题号 / 选项 / 答案分行书写</li>' +
+          '<li>支持中文表头、章节、难度与最多 8 个选项</li>' +
+          '<li>仅单选 / 多选 / 判断可入库，填空与问答题会提示跳过</li>' +
+          '<li>支持从 Word 表格直接复制粘贴</li>' +
+          '<li>旧版 .doc（Word 97-2003）在本机直接解析</li>' +
+        '</ol><button class="btn btn-sm btn-primary" data-action="import-download-docx">下载 Word 模板</button></div>' +
+      '<div class="imp-tpl-card"><div class="imp-tpl-icon imp-tpl-excel">X</div><h3>Excel 模板导入</h3>' +
+        '<ol class="imp-tpl-list">' +
+          '<li>首行为填写说明，第二行为表头</li>' +
+          '<li>必填列固定为 type / stem / answer</li>' +
+          '<li>答案用 A、C 或 A,C 填写，判断题写 T / F</li>' +
+          '<li>支持 .xlsx / .xls（Excel 97-2003 BIFF8）</li>' +
+          '<li>支持 CSV / TSV 与从 Excel 表格直接粘贴</li>' +
+        '</ol><button class="btn btn-sm btn-primary" data-action="import-download-xlsx">下载 Excel 模板</button></div>' +
+      '</div>';
+    h += '<div class="imp-drop">' +
+      '<div class="imp-drop-icons"><span class="imp-ficon imp-ficon-word">W</span><span class="imp-ficon imp-ficon-excel">X</span><span class="imp-ficon imp-ficon-text">T</span></div>' +
+      '<input type="file" id="imp-file" data-action="imp-file" accept=".xlsx,.xls,.docx,.doc,.csv,.tsv,.txt">' +
+      '<label class="imp-upload-btn" for="imp-file">↑ 上传文件</label>' +
+      '<p class="small muted">支持 Word、Excel、CSV / TSV；新旧版二进制文件在本机解析，无需另存为，也无需上传到服务器</p>' +
+      '<label class="link" for="imp-tab-smart">查看解析内容 / 手动粘贴 →</label>' +
+      '</div>';
+    h += '<p class="small faint imp-foot">新旧格式同时支持：<b>.xlsx / .xls</b>（Excel 97-2003 BIFF）、<b>.docx / .doc</b>（Word 97-2003）、CSV / TSV；旧版二进制文件在本机直接解析，无需另存为，也无需上传到服务器。模板格式兼容考试宝 Excel / Word 模板。</p>';
+    h += '<section class="card imp-history"><h2>上传记录</h2><p class="hint">最近 8 次解析与导入结果</p>' +
+      (history.length ? '<div class="table-wrap"><table class="tbl"><thead><tr><th>编号</th><th>文件名称</th><th>上传时间</th><th>文件大小</th><th>状态</th><th>操作</th></tr></thead><tbody>' +
+        history.map((x, i) => '<tr><td class="mono">' + (i + 1) + '</td><td>' + esc(x.name) + '</td><td class="nowrap">' + esc(x.timeText || fmt(x.time)) + '</td><td class="mono">' + esc(x.sizeText || (x.size + ' B')) + '</td>' +
+          '<td><span class="badge ' + (x.ok ? 'b-green' : 'b-red') + '">' + (x.ok ? '解析成功 · 入库 ' + (x.inserted || 0) + ' 题' : '校验未通过 · ' + esc(x.code || 'E001')) + '</span></td>' +
+          '<td><label class="link" for="imp-tab-smart">查看报告</label></td></tr>').join('') +
+        '</tbody></table></div>' : '<div class="empty"><span class="e-icon">▤</span>暂无上传记录</div>') +
+      '</section>';
+    h += '</div>';
+
+    /* ---------- Tab 2：智能导入（输入区 / 检查区左右分栏） ---------- */
+    h += '<div class="imp-pane imp-pane-smart">';
+    h += '<div class="imp-toolbar">' +
       '<label class="field">重复题目策略' + selHtml('imp-policy', 'imp-filter', [{v:'skip',l:'跳过（默认）'},{v:'overwrite',l:'覆盖并升版本'},{v:'new_version',l:'另存新版本'}], ui.policy) + '</label>' +
       '<label class="field">错误处理' + selHtml('imp-skip', 'imp-filter', [{v:'0',l:'整批原子（默认）'},{v:'1',l:'跳过错误行入库'}], ui.skipErrors) + '</label>' +
-      '<label class="field">导入目标题库' + selHtml('imp-bank', 'imp-filter', Quiz.store.banks().map(b => ({v:b.bank_id, l:b.name})), ui.bankId || Quiz.store.defaultBankId()) + '</label>' +
-      '<label class="field">选择文件（Excel / Word 新旧版 / CSV）<input type="file" id="imp-file" data-action="imp-file" accept=".xlsx,.xls,.docx,.doc,.csv,.tsv,.txt"></label>' +
-      '</div>' +
-      '<label class="field" style="margin-bottom:10px">粘贴内容（CSV / TSV，或从 Excel、Word 表格复制）<textarea id="imp-text" placeholder="question_id,type,stem,option_a,...">' + esc(ui.text || '') + '</textarea></label>' +
-      '<div class="row"><button class="btn btn-primary" data-action="import-run">校验并导入</button>' +
-      '<button class="btn btn-sm" data-action="import-review-open">打开文档导入校验页</button>' +
-      '<button class="btn btn-sm" data-action="ai-parse">✦ 用 AI 解析文本</button>' +
-      '<span class="small muted">Excel / Word（含 .xls / .doc）/ CSV 走本地解析，不依赖外部服务；AI 解析为可选兜底</span></div>' +
-      '<p class="small faint" style="margin:10px 0 0">导入校验页可先选表单、选表头行、逐列匹配字段并预览前 8 条与格式检查结果，确认后再入库；不写入任何示例数据。规则解析只认表格。若粘贴的是「1. 题干…A. …答案：C」这类非表格文本，可点「用 AI 解析文本」转成标准 CSV 后填入输入框；结果仍需人工核对，并照常点「校验并导入」走 E001–E010 校验。单次最多发送 ' + Quiz.ai.MAX_BLOCK_CHARS + ' 字符，需先在「数据与设置 → AI 模型配置」启用模型。</p>');
+      '<label class="field">导入目标题库' + selHtml('imp-bank', 'imp-filter', banks.map(b => ({v:b.bank_id, l:b.name})), ui.bankId || Quiz.store.defaultBankId(), banks.length ? '' : '（暂无题库，可不指定归属）') + '</label>' +
+      '<span class="grow"></span>' +
+      '<button class="btn btn-primary" data-action="import-run">校验并导入</button>' +
+      '</div>';
+    h += '<div class="imp-split">' +
+      '<div class="imp-col imp-col-input"><div class="imp-col-h"><b>输入区：</b><span class="grow"></span><span class="imp-col-links"><label class="link" for="imp-tab-format">格式规范</label><label class="link" for="imp-tab-doc">模板下载</label></span></div>' +
+        '<div class="imp-col-body"><div class="imp-watermark">输入区</div>' +
+        '<p class="small muted imp-rules">1. 支持 CSV / TSV 表格：表头需含 type、stem、answer<br>2. 也支持「1. 题干… A. 选项… 答案：C」文本，可点「用 AI 解析文本」转成表格<br>3. 粘贴后点右上角「校验并导入」，结果在右侧检查区显示</p>' +
+        '<div class="imp-chips"><span>单选题</span><span>多选题</span><span>判断题</span><span>填空题</span><span>简答题</span><span>案例分析题</span><span>论述题</span><span>计算题</span></div>' +
+        '<label class="field imp-text-label">粘贴内容（CSV / TSV，或从 Excel、Word 表格复制）<textarea id="imp-text" class="imp-text" placeholder="question_id,type,stem,option_a,...">' + esc(ui.text || '') + '</textarea></label>' +
+        '<div class="row imp-actions"><button class="btn btn-sm" data-action="import-review-open">打开文档导入校验页</button>' +
+        '<button class="btn btn-sm" data-action="ai-parse">✦ 用 AI 解析文本</button>' +
+        (ui.report && ui.report.header_diagnosis ? '<button class="btn btn-sm btn-primary" data-action="import-repair">✦ 提取答案并补齐表头</button>' : '') +
+        '</div>' +
+        '<p class="small faint">导入校验页可选表单、选表头行、逐列匹配字段并预览前 8 条；规则解析只认表格。单次最多发送 ' + Quiz.ai.MAX_BLOCK_CHARS + ' 字符，需先在「数据与设置 → AI 模型配置」启用模型。</p>' +
+        '</div></div>';
+    h += '<div class="imp-col imp-col-check"><div class="imp-col-h"><b>检查区：</b><span>分析结果</span><span class="grow"></span><span class="small muted">' +
+      (ui.report ? (ui.report.total + ' 行 · ' + ui.report.failed + ' 个问题') : '等待校验') + '</span></div><div class="imp-col-body">';
+    if (!ui.report && !(ui.review && ui.review.length)) h += '<div class="imp-watermark">检查区</div><div class="empty"><span class="e-icon">▤</span>暂无分析结果，请先粘贴内容或上传文件</div>';
 
     /* v1.4.1：表头错误单独给醒目诊断，避免只看到「没有可入库的新题目」 */
     if (ui.report && ui.report.header_diagnosis) {
@@ -177,14 +235,35 @@
           '<button class="btn btn-sm" style="margin-top:10px" data-action="import-error-csv">下载错误明细 CSV</button>'
           : '<div class="small muted">无错误</div>') +
         '</div></div>');
-
-      if (ui.review && ui.review.length) {
-        h += card('疑似重复队列（E009）', '内容指纹与库内题目一致，默认不自动合并；确认后才入库',
-          '<div class="table-wrap"><table><thead><tr><th>CSV 行</th><th>题干</th><th>匹配题目</th><th></th></tr></thead><tbody>' +
-          ui.review.map((x, i) => '<tr><td>' + x.row + '</td><td class="ellip">' + esc(x.question.stem) + '</td><td class="mono">' + esc(x.match_id || '同批次') + '</td><td><button class="btn btn-sm" data-action="import-confirm-review" data-index="' + i + '">确认入库</button></td></tr>').join('') +
-          '</tbody></table></div>');
-      }
     }
+    if (ui.review && ui.review.length) {
+      h += card('疑似重复队列（E009）', '内容指纹与库内题目一致，默认不自动合并；确认后才入库',
+        '<div class="table-wrap"><table><thead><tr><th>CSV 行</th><th>题干</th><th>匹配题目</th><th></th></tr></thead><tbody>' +
+        ui.review.map((x, i) => '<tr><td>' + x.row + '</td><td class="ellip">' + esc(x.question.stem) + '</td><td class="mono">' + esc(x.match_id || '同批次') + '</td><td><button class="btn btn-sm" data-action="import-confirm-review" data-index="' + i + '">确认入库</button></td></tr>').join('') +
+        '</tbody></table></div>');
+    }
+    h += '</div></div></div></div>';
+
+    /* ---------- Tab 3：格式说明 ---------- */
+    h += '<div class="imp-pane imp-pane-format">' +
+      '<section class="card"><h2>格式说明</h2><p class="hint">表格导入与文本转写都遵循以下规则</p>' +
+      '<ol class="imp-format-list">' +
+        '<li>每道题必须有题号，支持 <span class="mono">1.</span>、<span class="mono">1)</span>、<span class="mono">1、</span> 等写法</li>' +
+        '<li>选项用 <span class="mono">A.</span> <span class="mono">B.</span> <span class="mono">C.</span> <span class="mono">D.</span> 开头，每个选项单独一行</li>' +
+        '<li>答案单独一行，写作 <span class="mono">答案：C</span> 或 <span class="mono">正确答案：A,C</span></li>' +
+        '<li>判断题答案写「正确 / 错误」「对 / 错」「T / F」</li>' +
+        '<li>多选题答案用逗号分隔，如 <span class="mono">A,C</span>；不要写「选 AC」这类自然语言</li>' +
+        '<li>解析紧跟答案，写作 <span class="mono">解析：…</span>；章节 / 难度为选填</li>' +
+        '<li>表格导入必填列固定为 <span class="mono">type</span>、<span class="mono">stem</span>、<span class="mono">answer</span>，其余列可留空</li>' +
+      '</ol></section>' +
+      '<section class="card"><h2>试题样例</h2><p class="hint">下方为可解析的写法；红色行是常见错误</p>' +
+      '<pre class="imp-sample">' + esc('1. 下列关于 HTTPS 默认端口的说法，正确的是（  ）\nA. 80\nB. 443\nC. 21\nD. 25\n答案：B\n解析：HTTPS 默认 443，HTTP 默认 80。\n\n2. HTTPS 协议的默认端口是 443。\n答案：正确\n\n【错误示例】答案写成「选 B」而不是「答案：B」\n【错误示例】两行题目题干完全相同且未填 question_id → E008 同文件内题目 ID 重复') + '</pre>' +
+      '<div class="row"><button class="btn btn-sm btn-primary" data-action="import-download-xlsx">下载标准 Excel 模板</button>' +
+      '<button class="btn btn-sm" data-action="import-download-docx">下载 Word 模板</button>' +
+      '<label class="link" for="imp-tab-smart">返回智能导入</label></div></section>' +
+      '</div>';
+
+    h += '</div></div></div>';
     return h;
   };
 
@@ -194,13 +273,13 @@
     const bid = app.currentBankId();
     ui.bankId = bid;
     const cur = bid === Quiz.ALL_BANKS ? null : s.banks.find(b => b.bank_id === bid);
-    const curName = bid === Quiz.ALL_BANKS ? '全部题库' : (cur ? cur.name : '默认题库');
+    const curName = bid === Quiz.ALL_BANKS ? '全部题库' : (cur ? cur.name : '未分类题库');
     const rows = app.filterQuestions();
     const per = 15, pages = Math.max(1, Math.ceil(rows.length / per));
     ui.page = Math.min(Math.max(1, ui.page), pages);
     const slice = rows.slice((ui.page - 1) * per, ui.page * per);
     const cats = distinct({questions: rows}, 'category'), tags = distinct({questions: rows}, 'tags');
-    const bankName = id => { const b = s.banks.find(x => x.bank_id === id); return b ? b.name : '默认题库'; };
+    const bankName = id => { const b = s.banks.find(x => x.bank_id === id); return b ? b.name : '未分类题库'; };
 
     /* ① 题库选择 */
     const allCard = '<div class="bank-card' + (bid === Quiz.ALL_BANKS ? ' active' : '') + '" data-action="bank-select" data-id="' + Quiz.ALL_BANKS + '">' +
@@ -264,7 +343,7 @@
     b = b || {};
     return '<label class="field" style="margin-bottom:10px">题库名称<input type="text" id="bf-name" value="' + esc(b.name || '') + '" placeholder="如：2026 春季期末 / 计算机网络专项"></label>' +
       '<label class="field">描述（选填）<textarea id="bf-desc" style="min-height:64px" placeholder="用于说明该题库的用途、来源或适用对象">' + esc(b.description || '') + '</textarea></label>' +
-      '<p class="small faint" style="margin:10px 0 0">题目可通过编辑表单的「所属题库」或列表的「批量移动」自由调整归属；删除题库时题目会迁回默认题库，不会丢失。</p>';
+      '<p class="small faint" style="margin:10px 0 0">题目可通过编辑表单的「所属题库」或列表的「批量移动」自由调整归属；删除题库时题目会变为未分类，不会丢失。</p>';
   };
 
   /* ---------------- 刷题 ---------------- */

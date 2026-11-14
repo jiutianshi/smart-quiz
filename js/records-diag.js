@@ -7,7 +7,7 @@
   const Quiz = global.Quiz = global.Quiz || {};
   const store = Quiz.store, util = Quiz.util;
   const e = v => util.esc(String(v == null ? '' : v));
-  const VERSION = 'v1.11.0';
+  const VERSION = 'v1.12.0';
 
   function fmt(ts) {
     if (!ts) return '—';

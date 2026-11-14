@@ -76,7 +76,7 @@
   function ops(list) { return '<span class="op">' + list.join(' · ') + '</span>'; }
   function goLink(route, label) { return '<a class="btn-link" href="#/' + route + '">' + e(label) + '</a>'; }
   function todo(label, danger) { return '<button class="btn-link' + (danger ? ' danger' : '') + '" data-action="nav-todo">' + e(label) + '</button>'; }
-  function bankName(id) { const b = store.bank && store.bank(id); return (b && (b.name || b.bank_name)) || '默认题库'; }
+  function bankName(id) { const b = store.bank && store.bank(id); return (b && (b.name || b.bank_name)) || '未分类题库'; }
   function countInBanks(items, bankId) {
     if (bankId === 'ALL') return items.length;
     return items.filter(q => (q.bank_id || store.defaultBankId()) === bankId).length;
