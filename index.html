@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- v1.3.2：HTML 不强缓存 + 资源带版本号，避免发布后浏览器仍加载旧 JS -->
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title>智能题库 · 答题刷题系统</title>
+<link rel="stylesheet" href="styles.css?v=1.10.0">
+<script>
+/* 首屏预置主题，避免浅色闪烁（与 js/enhance.js 使用同一存储键） */
+try {
+  var m = localStorage.getItem('smartQuiz.theme.v1') || 'system';
+  var d = m === 'dark' || (m === 'system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  document.documentElement.setAttribute('data-theme', d ? 'dark' : 'light');
+} catch (e) {}
+</script>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">题</div>
+      <div>
+        <div class="brand-name">智能题库</div>
+        <div class="brand-sub">答题 · 刷题系统 v1.10.0</div>
+      </div>
+    </div>
+    <nav class="nav" id="nav">
+      <!-- 一级 7 项并列；带二级的分组默认收起 -->
+      <a class="nav-item nav-root nav-l1" href="#/dashboard" data-nav="dashboard"><span class="ni">⌂</span><span class="nav-label">首页</span></a>
+
+      <div class="nav-block" data-block="bankcenter">
+        <button class="nav-item nav-root nav-l1 nav-toggle" data-action="nav-toggle" data-group="bankcenter" aria-expanded="false">
+          <span class="ni">▤</span><span class="nav-label">题库中心</span><span class="nav-caret">⌄</span>
+        </button>
+        <div class="nav-sub is-collapsed" data-sub="bankcenter">
+          <a class="nav-item" href="#/mybanks" data-nav="mybanks">我的题库</a>
+          <a class="nav-item" href="#/bankGrid" data-nav="bankGrid">试题表格编辑</a>
+          <a class="nav-item" href="#/allwrong" data-nav="allwrong">全部错题</a>
+          <a class="nav-item" href="#/allfav" data-nav="allfav">全部收藏题</a>
+          <a class="nav-item" href="#/practiceRecords" data-nav="practiceRecords">练习记录</a>
+        </div>
+      </div>
+
+      <div class="nav-block" data-block="exam">
+        <button class="nav-item nav-root nav-l1 nav-toggle" data-action="nav-toggle" data-group="exam" aria-expanded="false">
+          <span class="ni">▣</span><span class="nav-label">考试管理</span><span class="nav-caret">⌄</span>
+        </button>
+        <div class="nav-sub is-collapsed" data-sub="exam">
+          <a class="nav-item" href="#/examNew" data-nav="examNew">新增考试</a>
+          <a class="nav-item" href="#/examHistory" data-nav="examHistory">考试历史</a>
+        </div>
+      </div>
+
+      <a class="nav-item nav-root nav-l1" href="#/library" data-nav="library"><span class="ni">▦</span><span class="nav-label">资料库</span><span class="nav-tag">预留</span></a>
+      <a class="nav-item nav-root nav-l1" href="#/groups" data-nav="groups"><span class="ni">◎</span><span class="nav-label">我的群组</span></a>
+
+      <div class="nav-block" data-block="account">
+        <button class="nav-item nav-root nav-l1 nav-toggle" data-action="nav-toggle" data-group="account" aria-expanded="false">
+          <span class="ni">◉</span><span class="nav-label">账户中心</span><span class="nav-caret">⌄</span>
+        </button>
+        <div class="nav-sub is-collapsed" data-sub="account">
+          <a class="nav-item" href="#/account" data-nav="account">账户信息</a>
+          <a class="nav-item" href="#/orders" data-nav="orders">我的订单</a>
+          <a class="nav-item" href="#/reports" data-nav="reports">试题报错</a>
+          <a class="nav-item" href="#/messages" data-nav="messages">消息中心</a>
+          <a class="nav-item" href="#/downloads" data-nav="downloads">文档下载</a>
+          <a class="nav-item" href="#/trash" data-nav="trash">回收站</a>
+        </div>
+      </div>
+
+      <a class="nav-item nav-root nav-l1" href="#/settings" data-nav="settings"><span class="ni">⚙</span><span class="nav-label">数据与设置</span></a>
+    </nav>
+    <div class="side-foot">
+      <span class="dot" id="storage-dot"></span>
+      <span id="storage-text">本地存储</span>
+      <div class="side-foot-sub" id="side-count">—</div>
+      <button class="side-collapse" data-action="nav-collapse-all" title="收起 / 展开全部分组">☰</button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div>
+        <h1 id="page-title">首页</h1>
+        <p id="page-desc">题库、练习与学习档案总览</p>
+      </div>
+      <div class="topbar-right">
+        <button class="btn btn-ghost" id="ai-status-btn" data-action="ai-go-settings" title="查看或配置 AI 模型（可选功能）">✦ AI 未启用</button>
+        <button class="btn btn-ghost" id="theme-btn" data-action="theme-cycle" title="切换主题：跟随系统 → 浅色 → 深色">◐ 跟随系统</button>
+        <button class="btn btn-ghost" data-action="export-json">导出数据</button>
+      </div>
+    </header>
+    <div class="view" id="view"></div>
+  </main>
+</div>
+
+<div id="auth-gate-root"></div>
+<div id="modal-root"></div>
+<div id="toast-root"></div>
+
+<script src="js/store.js?v=1.10.0"></script>
+<script src="js/scorer.js?v=1.10.0"></script>
+<script src="js/enhance.js?v=1.10.0"></script>
+<script src="js/importer.js?v=1.10.0"></script>
+<script src="js/ai.js?v=1.10.0"></script>
+<script src="js/office.js?v=1.10.0"></script>
+<script src="js/legacy-office.js?v=1.10.0"></script>
+<script src="js/template-assets.js?v=1.10.0"></script>
+<script src="js/charts.js?v=1.10.0"></script>
+<script src="js/records-diag.js?v=1.10.0"></script>
+<script src="js/pages.js?v=1.10.0"></script>
+<script src="js/nav-pages.js?v=1.10.0"></script>
+<script src="js/practice-hub.js?v=1.10.0"></script>
+<script src="js/import-review.js?v=1.10.0"></script>
+<script src="js/bank-grid.js?v=1.10.0"></script>
+<!-- 练习历史合并：纯函数工具，供导入备份合并与自测使用，无任何网络 / 账号依赖 -->
+<script src="js/history-merge.js?v=1.10.0"></script>
+<script src="js/bank-ops.js?v=1.10.0"></script>
+<script src="js/groups.js?v=1.10.0"></script>
+<script src="js/account-gate.js?v=1.10.0"></script>
+<script src="js/app.js?v=1.10.0"></script>
+</body>
+</html>
