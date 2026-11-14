@@ -63,8 +63,10 @@
     ui: {
       stats: {range:'all', category:'', type:''},
       /* v1.12.0：tab 记住文档导入页当前标签；上传记录存独立键，不进账号业务 KEYS */
-      imp: {policy:'skip', skipErrors:'0', text:'', report:null, review:[], batchId:'', bankId: Quiz.DEFAULT_BANK_ID,
-        lastFileName:'', lastFileSize:0, mode:'doc', aiText:''},
+      /* v1.12.4：policy 默认「另存为新版本」；continueBankId＝「继续添加」锁定的目标题库（内存态）；
+         lastResult / lastError＝最近一次导入结果，用于导入后结果面板与内嵌试题表格编辑 */
+      imp: {policy:'new_version', skipErrors:'0', text:'', report:null, review:[], batchId:'', bankId: '',
+        lastFileName:'', lastFileSize:0, mode:'doc', aiText:'', continueBankId:'', lastResult:null, lastError:null},
       bank: {kw:'', category:'', type:'', difficulty:'', status:'', tag:'', page:1, bankId: Quiz.DEFAULT_BANK_ID},
       /* v1.3.3 文档导入校验页：只存上次选择的源文件（内存），不进备份 */
       importReview: {file:null, fileName:''},
@@ -646,14 +648,26 @@
   app.importHistory = importHistory;
   app.pushImportHistory = pushImportHistory;
 
+  function resolveImportTargetBank() {
+    /* v1.12.4：目标题库不再由下拉选择——「继续添加」期间导入到锁定的题库，否则每次导入自动新建题库；
+       新题库名取上传文件名（去扩展名），重名自动追加序号 */
+    const contId = app.ui.imp.continueBankId;
+    if (contId && store.bank(contId)) return contId;
+    let nm = String(app.ui.imp.lastFileName || '').replace(/\.[^.]+$/, '').trim();
+    if (!nm) nm = '导入题库 ' + new Date().toLocaleDateString('zh-CN');
+    const names = store.banks().map(b => b.name);
+    if (names.includes(nm)) { const base = nm; let k = 2; while (names.includes(nm)) nm = base + '(' + (k++) + ')'; }
+    const b = store.addBank(nm, '文档导入自动创建');
+    return b ? b.bank_id : '';
+  }
+
   function doImport(textOverride, optsOverride) {
     /* v1.3.3：校验页确认时传入已匹配的 CSV 与导入页已保存的策略，复用同一条入库链 */
     const text = textOverride != null ? textOverride : val('imp-text');
     if (!text.trim()) { toast('请先粘贴内容或选择文件', 'err'); return; }
-    const opts = optsOverride || {duplicate_policy: val('imp-policy') || 'skip', skip_error_rows: val('imp-skip') === '1'};
+    const opts = optsOverride || {duplicate_policy: val('imp-policy') || 'new_version', skip_error_rows: val('imp-skip') === '1'};
     app.ui.imp.policy = opts.duplicate_policy;
     app.ui.imp.skipErrors = opts.skip_error_rows ? '1' : '0';
-    app.ui.imp.bankId = store.bank(val('imp-bank') || app.ui.imp.bankId) ? (val('imp-bank') || app.ui.imp.bankId) : store.defaultBankId();
     const r = importer.runImport(text, store.state().questions, opts);
     app.ui.imp.text = text;
     app.ui.imp.report = r.report;
@@ -667,7 +681,8 @@
       sizeText: app.ui.imp.lastFileSize ? (app.ui.imp.lastFileSize / 1024).toFixed(1) + ' KB' : text.length + ' B',
       ok: !r.report.atomic_rollback, inserted: r.valid.length, code: err0 ? err0.code : ''
     });
-    const targetBank = app.ui.imp.bankId;
+    const targetBank = (r.valid.length || r.reviewQueue.length) ? resolveImportTargetBank() : app.ui.imp.bankId;
+    app.ui.imp.bankId = targetBank;
     r.valid.forEach(q => { q.bank_id = targetBank; });
     r.reviewQueue.forEach(item => { if (item.question) item.question.bank_id = targetBank; });
     if (r.valid.length) {
@@ -676,12 +691,24 @@
         const i = s.questions.findIndex(x => x.question_id === q.question_id);
         if (i >= 0) s.questions[i] = q; else s.questions.push(q);
       }));
-      toast('成功入库 ' + n + ' 题' + (r.reviewQueue.length ? '，' + r.reviewQueue.length + ' 题待人工确认' : ''), 'ok');
+      const bankName = (store.bank(targetBank) || {name:'未分类题库'}).name;
+      /* v1.12.4：结果面板 + 内嵌试题表格编辑（不再弹出 toast 一闪而过），「继续添加」锁定本题库 */
+      app.ui.imp.lastResult = {bankId:targetBank, bankName:bankName, inserted:n};
+      app.ui.imp.lastError = null;
+      try {
+        if (Quiz.bankGrid && Quiz.bankGrid.openFromBank) {
+          Quiz.bankGrid.openFromBank(targetBank);
+          if (Quiz.bankGridState) Quiz.bankGridState.afterImport = {inserted:n, bankName:bankName};
+        }
+      } catch (x) {}
+      toast('成功入库 ' + n + ' 题到题库「' + bankName + '」，可在下方表格中编辑', 'ok');
     } else {
       /* v1.4.1：不再用「没有可入库的新题目」掩盖真实原因，首条错误直接进 toast */
       const e0 = (r.report.errors || [])[0];
-      const why = e0 ? e0.code + '：' + e0.message : (r.report.duplicated ? '内容指纹与库内题目重复，请在下方人工确认队列处理' : '请检查表头与题目内容');
-      toast((r.report.atomic_rollback ? '校验未通过，整批已回滚' : '没有可入库的新题目') + ' · ' + why + '（详见导入报告）', 'err');
+      const why = e0 ? e0.code + '：' + e0.message : (r.report.duplicated ? '内容指纹与库内题目重复，请在人工确认队列处理' : '请检查表头与题目内容');
+      app.ui.imp.lastResult = null;
+      app.ui.imp.lastError = {atomic:!!r.report.atomic_rollback, code:e0 ? e0.code : '', message:e0 ? e0.message : '', why};
+      toast((r.report.atomic_rollback ? '校验未通过，整批已回滚' : '没有可入库的新题目') + ' · ' + why, 'err');
     }
     savePrefs();
     render();
@@ -738,9 +765,13 @@
       app.ui.importReview.fileName = file.name;
       /* v1.12.1：单页布局，解析完成后把焦点交还输入区 */
       try { const ti = $('imp-text'); if (ti && ti.focus) ti.focus(); } catch (x) {}
-      if (named === 'text') toast('已载入 ' + file.name + '，请核对后点击「校验并导入」', 'ok');
-      else toast('已解析 ' + file.name + '（' + Math.max(0, text.split('\n').length - 1) + ' 行数据）' + (note ? '；' + note : '') + '，请核对后点击「校验并导入」', 'ok');
+      /* v1.12.4：选择文档后自动校验并导入，无需再点「校验并导入」；导入结果与试题表格编辑直接在页面内呈现 */
+      const lineN = Math.max(0, String(text || '').split('\n').length - 1);
+      toast('已解析 ' + file.name + (lineN ? '（' + lineN + ' 行数据）' : '') + (note ? '；' + note : '') + '，正在自动校验并导入…', 'ok');
+      doImport(text);
     } catch (e) {
+      app.ui.imp.lastResult = null;
+      app.ui.imp.lastError = {atomic:false, code:'PARSE', message:e.message, why:e.message};
       toast(file.name + ' 解析失败：' + e.message, 'err');
     }
   }
@@ -998,6 +1029,20 @@
       }
       case 'ai-go-settings': closeModal(); go('settings'); break;
       case 'imp-mode': app.ui.imp.mode = el.dataset.mode === 'ai' ? 'ai' : 'doc'; render(); break;
+      /* v1.12.4：继续添加 —— 锁定上次导入的目标题库，后续导入不再新建题库 */
+      case 'imp-continue-add': {
+        const lr = app.ui.imp.lastResult;
+        if (lr && store.bank(lr.bankId)) {
+          app.ui.imp.continueBankId = lr.bankId;
+          toast('继续添加已开启：下次上传的文件将导入到题库「' + store.bank(lr.bankId).name + '」', 'ok');
+        } else toast('暂无可继续的题库，请先成功导入一次', 'err');
+        render(); break;
+      }
+      case 'imp-continue-stop': {
+        app.ui.imp.continueBankId = '';
+        toast('已结束本批继续添加，下次导入将自动新建题库', 'ok');
+        render(); break;
+      }
       case 'imp-ai-run': doAiImport(); break;
       case 'advanced-mode-open':
         modal('高级模式',

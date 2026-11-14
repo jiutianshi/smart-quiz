@@ -1101,3 +1101,11 @@ html[data-theme="dark"] .imp-upload-btn{color:#101828}
 .imp-ai-panel .row{align-items:center;gap:10px;margin-top:12px}
 .imp-after{margin-top:12px;align-items:center;gap:10px}
 html[data-theme="dark"] .imp-mode.on{color:#101828}
+
+/* ==================== v1.12.4 导入流程改版：自动导入 / 内嵌表格编辑 / 继续添加 ==================== */
+.imp-result{border:1px solid rgba(34,139,34,.35);border-radius:10px;padding:14px 16px;background:rgba(34,139,34,.06)}
+.imp-result-ok{font-size:14px;font-weight:600;margin-bottom:8px}
+.imp-result-ops{align-items:center;gap:12px;margin:0}
+.imp-fail{border:1px solid rgba(200,40,40,.35);border-radius:10px;padding:12px 16px;background:rgba(200,40,40,.06);font-size:13.5px}
+.imp-continue{border:1px solid var(--primary);border-radius:10px;padding:10px 16px;background:rgba(37,99,235,.06);font-size:13.5px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.bg-after{border:1px solid rgba(34,139,34,.35);border-radius:10px;padding:12px 16px;background:rgba(34,139,34,.06);margin:10px 0 14px;font-size:13.5px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}

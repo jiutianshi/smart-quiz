@@ -18,7 +18,8 @@
 
   const S = Quiz.bankGridState = {
     mode:'bank', bankId:'', sourceName:'', sourceCsv:'',
-    rows:[], original:[], onlyErrors:false, dirty:false, message:'', saved:0
+    rows:[], original:[], onlyErrors:false, dirty:false, message:'', saved:0,
+    afterImport:null   /* v1.12.4：文档导入成功后的提示态（{inserted, bankName}），供页面内横幅与「继续添加」 */
   };
 
   function toast(msg, type) { const t = Quiz.app && Quiz.app.toast; if (t) t(msg, type || ''); }
@@ -135,7 +136,7 @@
 
   /* ---------- 打开两种来源 ---------- */
   function openFromBank(bankId) {
-    S.mode = 'bank'; S.bankId = safeBank(bankId); S.sourceName = ''; S.sourceCsv = '';
+    S.mode = 'bank'; S.bankId = safeBank(bankId); S.sourceName = ''; S.sourceCsv = ''; S.afterImport = null;
     const def = store.defaultBankId();
     S.rows = store.state().questions
       .filter(q => (q.bank_id || def) === S.bankId)
@@ -147,7 +148,7 @@
   }
   function openFromCsv(csv, meta) {
     meta = meta || {};
-    S.mode = 'import';
+    S.mode = 'import'; S.afterImport = null;
     S.bankId = safeBank(meta.bankId || (Quiz.app && Quiz.app.ui && Quiz.app.ui.imp && Quiz.app.ui.imp.bankId));
     S.sourceName = meta.fileName || '';
     S.sourceCsv = csv;
@@ -276,6 +277,10 @@
     let h = '<section class="card bg-card"><h2>试题表格编辑</h2>' +
       '<p class="hint">第一步选择题库，第二步直接在表格里修改试题，第三步保存。报错行复用导入校验同一套 E001–E010 规则；未保存前不会写入题库。</p>';
 
+    /* v1.12.4：文档导入成功后的横幅 —— 提示可直接编辑，并提供「继续添加」回到导入页并锁定本题库 */
+    if (S.afterImport) h += '<div class="imp-after bg-after">✓ 导入成功：已入库 <b>' + S.afterImport.inserted + '</b> 题到题库「<b>' + e(S.afterImport.bankName) + '</b>」，可直接在下方表格中编辑，改完点「保存修改」' +
+      '<button class="btn btn-sm btn-primary" data-action="bg-continue">✚ 继续添加</button>' +
+      '<span class="small faint">点「继续添加」后，下次上传的文件将导入到本题库</span></div>';
     h += '<div class="bg-bar">' +
       '<a class="link bg-back" href="#/' + back + '">‹ 返回</a>' +
       '<label class="bg-bank-label">题库 <select id="bg-bank" data-action="bg-bank">' +
@@ -352,7 +357,15 @@
       case 'bg-reload': reload(); return true;
       case 'bg-reupload':
         if (S.dirty && !ask('有未保存的修改，确定离开并返回文档导入吗？')) return true;
-        S.rows = []; S.dirty = false; S.sourceCsv = ''; go('import'); return true;
+        S.rows = []; S.dirty = false; S.sourceCsv = ''; S.afterImport = null; go('import'); return true;
+      /* v1.12.4：继续添加 —— 锁定当前题库为后续导入目标，返回文档导入页 */
+      case 'bg-continue': {
+        if (Quiz.app && Quiz.app.ui && Quiz.app.ui.imp) Quiz.app.ui.imp.continueBankId = S.bankId;
+        S.afterImport = null;
+        go('import');
+        toast('继续添加已开启：下次上传的文件将导入到题库「' + bankName(S.bankId) + '」', 'ok');
+        return true;
+      }
       case 'bg-save': saveBank(); return true;
       case 'bg-save-import': saveImport(); return true;
       case 'bg-del':

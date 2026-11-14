@@ -168,19 +168,12 @@
       '<input type="file" id="imp-file" data-action="imp-file" accept=".xlsx,.xls,.docx,.doc,.csv,.tsv,.txt">' +
       '<label class="imp-upload-btn" for="imp-file">↑ 上传文件</label>' +
       '<p class="small muted">支持 Word、Excel、CSV / TSV；新旧版二进制文件在本机解析，无需另存为，也无需上传到服务器</p>' +
-      '<p class="small faint">上传后解析结果会自动带入，点「校验并导入」即可入库</p>' +
+      '<p class="small faint">上传后自动校验并导入：重复题目另存为新版本，校验失败整批不入库；导入成功后可直接在下方表格中编辑试题</p>' +
       '</div>';
-    h += '<p class="small faint imp-foot">新旧格式同时支持：<b>.xlsx / .xls</b>（Excel 97-2003 BIFF）、<b>.docx / .doc</b>（Word 97-2003）、CSV / TSV；旧版二进制文件在本机直接解析，无需另存为，也无需上传到服务器。模板格式兼容考试宝 Excel / Word 模板。表头需含 type / stem / answer；答案写 A、A,C 或 T / F；<b>题目 ID 无需填写</b>，系统自动编号，重复的题目内容会自动去重或跳过。</p>';
+    h += '<p class="small faint imp-foot">新旧格式同时支持：<b>.xlsx / .xls</b>（Excel 97-2003 BIFF）、<b>.docx / .doc</b>（Word 97-2003）、CSV / TSV；旧版二进制文件在本机直接解析，无需另存为，也无需上传到服务器。模板格式兼容考试宝 Excel / Word 模板。表头需含 type / stem / answer；答案写 A、A,C 或 T / F；<b>题目 ID 无需填写</b>，系统自动编号；每次导入默认新建题库，重复题目自动另存为新版本。</p>';
 
-    /* ③ 导入策略与导入按钮 */
-    h += '<div class="imp-toolbar">' +
-      '<label class="field">重复题目策略' + selHtml('imp-policy', 'imp-filter', [{v:'skip',l:'跳过（默认）'},{v:'overwrite',l:'覆盖并升版本'},{v:'new_version',l:'另存新版本'}], ui.policy) + '</label>' +
-      '<label class="field">错误处理' + selHtml('imp-skip', 'imp-filter', [{v:'0',l:'整批原子（默认）'},{v:'1',l:'跳过错误行入库'}], ui.skipErrors) + '</label>' +
-      '<label class="field">导入目标题库' + selHtml('imp-bank', 'imp-filter', banks.map(b => ({v:b.bank_id, l:b.name})), ui.bankId || Quiz.store.defaultBankId(), banks.length ? '' : '（暂无题库，可不指定归属）') + '</label>' +
-      '<span class="grow"></span>' +
-      '<button class="btn btn-primary" data-action="import-run">校验并导入</button>' +
-      '</div>';
-
+    /* ③ v1.12.4：策略三下拉与「校验并导入」按钮已删除——选文件即自动导入；
+       控件移入隐藏容器（自测与隐藏链路仍依赖这些 id），默认值：另存为新版本 / 整批原子 */
     } else {
       /* v1.12.3：AI 导入 —— 上传文档后由 AI 解析成标准 CSV，再复用既有 doImport 入库 */
       h += '<div class="imp-ai-panel">' +
@@ -197,17 +190,41 @@
         '<p class="small faint">AI 解析结果为标准 CSV，会带入内部输入区并沿用同一套 E001–E010 校验；解析结果请按页面提示核对。</p>' +
         '</div>';
     }
-    /* ④ 隐藏的功能控件：承接上传解析结果、程序调用与自测，不在页面上展示 */
+    /* ④ v1.12.4：导入结果面板 —— 导入成功即在页面内呈现试题表格编辑 + 继续添加 */
+    const lr = ui.lastResult;
+    if (lr && Quiz.store.bank(lr.bankId)) {
+      h += '<div class="imp-after imp-result"><div class="imp-result-ok">✓ 导入成功：已入库 <b>' + lr.inserted + '</b> 题到题库「<b>' + esc(lr.bankName) + '</b>」，下方可直接编辑试题</div>' +
+        '<div class="row imp-result-ops">' +
+        '<button class="btn btn-sm btn-primary" data-action="imp-continue-add">✚ 继续添加</button>' +
+        '<span class="small muted">点「继续添加」后，下次上传的文件将导入到本题库</span>' +
+        '</div></div>';
+      /* v1.12.4：内嵌试题表格编辑界面（复用 bankGrid 的表格编辑、报错检测与保存链路） */
+      try { h += Quiz.pages.bankGrid(app); } catch (x) { h += '<div class="imp-after imp-fail">试题表格编辑加载失败，可到「我的题库」中编辑</div>'; }
+    } else {
+      const le = ui.lastError;
+      if (le) h += '<div class="imp-after imp-fail">✕ ' + (le.atomic ? '校验未通过，整批已回滚' : '导入未完成') + ' · ' +
+        esc(le.code ? le.code + '：' : '') + esc(le.why || le.message || '请检查文件内容') + '。请按模板修正后重新上传，上传后自动校验并导入。</div>';
+    }
+    /* v1.12.4：继续添加状态提示 */
+    if (ui.continueBankId && Quiz.store.bank(ui.continueBankId)) {
+      h += '<div class="imp-after imp-continue">✚ 继续添加中：新上传的文件将导入到题库「<b>' + esc(Quiz.store.bank(ui.continueBankId).name) + '</b>」' +
+        '<button class="btn btn-sm" data-action="imp-continue-stop">结束本批导入</button></div>';
+    }
+
+    /* ⑤ 隐藏的功能控件：承接上传解析结果、程序调用与自测，不在页面上展示；
+       v1.12.4 起策略三下拉与 import-run 按钮也移入此处（默认：另存为新版本 / 整批原子） */
     h += '<div class="imp-hidden" style="display:none" aria-hidden="true">' +
       '<textarea id="imp-text" class="imp-text" placeholder="question_id,type,stem,option_a,...">' + esc(ui.text || '') + '</textarea>' +
+      '<label class="field">重复题目策略' + selHtml('imp-policy', 'imp-filter', [{v:'new_version',l:'另存为新版本（默认）'},{v:'skip',l:'跳过重复'},{v:'overwrite',l:'覆盖并升版本'}], ui.policy) + '</label>' +
+      '<label class="field">错误处理' + selHtml('imp-skip', 'imp-filter', [{v:'0',l:'整批原子（默认）'},{v:'1',l:'跳过错误行入库'}], ui.skipErrors) + '</label>' +
+      '<label class="field">导入目标题库' + selHtml('imp-bank', 'imp-filter', banks.map(b => ({v:b.bank_id, l:b.name})), ui.bankId || Quiz.store.defaultBankId(), banks.length ? '' : '（暂无题库，可不指定归属）') + '</label>' +
+      '<button type="button" data-action="import-run">校验并导入</button>' +
       '<button type="button" data-action="import-review-open">打开文档导入校验页</button>' +
       '<button type="button" data-action="ai-parse">✦ 用 AI 解析文本</button>' +
       '<button type="button" data-action="import-repair">✦ 提取答案并补齐表头</button>' +
       '<button type="button" data-action="import-error-csv">下载错误明细 CSV</button>' +
       '<button type="button" data-action="import-confirm-review" data-index="0">确认入库</button>' +
       '</div>';
-
-    /* ⑤ 上传记录 */
     h += '<section class="card imp-history"><h2>上传记录</h2><p class="hint">最近 8 次解析与导入结果，错误详情可在页面右上角提示中查看</p>' +
       (history.length ? '<div class="table-wrap"><table class="tbl"><thead><tr><th>编号</th><th>文件名称</th><th>上传时间</th><th>文件大小</th><th>状态</th></tr></thead><tbody>' +
         history.map((x, i) => '<tr><td class="mono">' + (i + 1) + '</td><td>' + esc(x.name) + '</td><td class="nowrap">' + esc(x.timeText || fmt(x.time)) + '</td><td class="mono">' + esc(x.sizeText || (x.size + ' B')) + '</td>' +
