@@ -64,7 +64,7 @@
       stats: {range:'all', category:'', type:''},
       /* v1.12.0：tab 记住文档导入页当前标签；上传记录存独立键，不进账号业务 KEYS */
       imp: {policy:'skip', skipErrors:'0', text:'', report:null, review:[], batchId:'', bankId: Quiz.DEFAULT_BANK_ID,
-        lastFileName:'', lastFileSize:0},
+        lastFileName:'', lastFileSize:0, mode:'doc', aiText:''},
       bank: {kw:'', category:'', type:'', difficulty:'', status:'', tag:'', page:1, bankId: Quiz.DEFAULT_BANK_ID},
       /* v1.3.3 文档导入校验页：只存上次选择的源文件（内存），不进备份 */
       importReview: {file:null, fileName:''},
@@ -686,6 +686,41 @@
     savePrefs();
     render();
   }
+  /* ---------- v1.12.3：AI 导入（与文档导入并列） ---------- */
+  async function readAiImportFile(file) {
+    if (!file) return;
+    toast('正在读取 ' + file.name + ' …');
+    try {
+      let text = '';
+      if (Quiz.office && Quiz.office.readAuto) text = await Quiz.office.readAuto(file, file.name);
+      else if (file.text) text = await file.text();
+      app.ui.imp.aiText = String(text || '');
+      app.ui.imp.lastFileName = file.name;
+      app.ui.imp.lastFileSize = file.size || 0;
+      toast('已读取 ' + file.name + '（' + app.ui.imp.aiText.length + ' 字符），点「AI 解析并导入」', 'ok');
+    } catch (e) {
+      toast(file.name + ' 读取失败：' + (e && e.message || e), 'err');
+    }
+  }
+  async function doAiImport() {
+    const aiApi = Quiz.ai;
+    const text = app.ui.imp.aiText || val('imp-text') || '';
+    if (!String(text).trim()) { toast('请先上传需要 AI 处理的文档', 'err'); return; }
+    if (!aiApi || !aiApi.isReady || !aiApi.isReady()) { aiNotReady('AI 导入需要先配置模型', 'AI 导入'); return; }
+    toast('正在由 AI 解析文档…');
+    try {
+      const r = await aiApi.parseQuestions(String(text).slice(0, aiApi.MAX_BLOCK_CHARS));
+      const csv = r && r.csv;
+      if (!csv) { toast('AI 未能识别出题目，请检查文档内容', 'err'); return; }
+      if ($('imp-text')) $('imp-text').value = csv;
+      app.ui.imp.text = csv;
+      doImport(csv);
+    } catch (e) {
+      toast('AI 解析失败：' + (e && e.message || e), 'err');
+    }
+  }
+  app.doAiImport = doAiImport;
+
   async function readImportFile(file) {
     if (!file) return;
     /* v1.3.2：统一按文件内容分流，扩展名只作为兜底提示；
@@ -962,6 +997,16 @@
         go('examHistory'); toast('考试已创建（仅保存在本机）', 'ok'); break;
       }
       case 'ai-go-settings': closeModal(); go('settings'); break;
+      case 'imp-mode': app.ui.imp.mode = el.dataset.mode === 'ai' ? 'ai' : 'doc'; render(); break;
+      case 'imp-ai-run': doAiImport(); break;
+      case 'advanced-mode-open':
+        modal('高级模式',
+          '<p>数据与设置属于高级模式，包含判分与学习默认配置、AI 模型配置。修改会影响后续练习、判分与文档导入行为。</p>' +
+          '<p class="small muted">确认开启后才会进入设置页；未确认不会打开。</p>',
+          '<button class="btn" data-action="close-modal">取消</button>' +
+          '<button class="btn btn-primary" data-action="advanced-mode-confirm">确认开启</button>');
+        break;
+      case 'advanced-mode-confirm': closeModal(); go('settings'); break;
       case 'ai-save': {
         try {
           ai.saveConfig({enabled: !!($('ai-enabled') && $('ai-enabled').checked),
@@ -1349,6 +1394,7 @@
     }
     if (a === 'result-filter') { app.ui.resultFilter = el.value; render(); return; }
     if (a === 'imp-file') { readImportFile(e.target.files[0]); return; }
+    if (a === 'imp-ai-file') { readAiImportFile(e.target.files[0]); return; }
     if (a === 'settings-file') {
       const f = e.target.files[0]; if (!f) return;
       const fr = new FileReader();

@@ -116,10 +116,7 @@
     h += '<div class="toolbar bo-toolbar bo-toolbar-top" style="padding:14px 16px">' +
       '<a class="btn btn-sm btn-c-blue" href="#/import">上传题库</a>' +
       '<button class="btn btn-sm btn-c-cyan" data-action="ai-go-settings">AI 解析</button>' +
-      '<a class="btn btn-sm btn-c-orange" href="#/bank">人工录入</a>' +
       '<button class="btn btn-sm btn-c-purple" data-action="ai-go-settings">智能解析</button>' +
-      '<button class="btn btn-sm btn-c-blue" data-action="ai-go-settings">AI 出题</button>' +
-      '<button class="btn btn-sm" data-action="nav-download-template">下载模板</button>' +
       '<div class="dropdown"><button class="btn btn-sm btn-c-soft" data-action="nav-menu" data-menu="mybanks">更多操作 ⌄</button>' +
         '<div class="dropdown-menu' + (S.mybanks.menu ? ' open' : '') + '">' +
           '<button data-action="bank-create">新建题库</button>' +

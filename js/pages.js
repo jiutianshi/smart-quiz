@@ -127,9 +127,19 @@
     const ui = app.ui.imp;
     const banks = Quiz.store.banks();
     const history = (app.importHistory && app.importHistory()) || [];
+    const mode = ui.mode === 'ai' ? 'ai' : 'doc';
+    let aiReady = false;
+    try { aiReady = !!(Quiz.ai && Quiz.ai.isReady && Quiz.ai.isReady()); } catch (x) {}
 
     let h = '<div class="imp-shell">';
+    /* v1.12.3：文档导入与 AI 导入并列，用户可切换；切换状态保存在 app.ui.imp.mode */
+    h += '<div class="imp-modes">' +
+      '<button type="button" class="imp-mode' + (mode === 'doc' ? ' on' : '') + '" data-action="imp-mode" data-mode="doc">▤ 文档导入</button>' +
+      '<button type="button" class="imp-mode' + (mode === 'ai' ? ' on' : '') + '" data-action="imp-mode" data-mode="ai">✦ AI 导入</button>' +
+      '<span class="small faint">' + (mode === 'ai' ? '上传文档，由 AI 识别题目、选项与答案后入库' : '按标准模板上传，本机解析校验后入库') + '</span>' +
+      '</div>';
     h += '<div class="imp-notice">请先下载标准模板并按模板填写；文件仅在本机解析，不会上传到服务器。</div>';
+    if (mode === 'doc') {
     h += '<p class="imp-warn">请先下载标准模板，参考模板填写试题，然后进行上传</p>';
 
     /* ① Word / Excel 双模板卡 */
@@ -171,6 +181,22 @@
       '<button class="btn btn-primary" data-action="import-run">校验并导入</button>' +
       '</div>';
 
+    } else {
+      /* v1.12.3：AI 导入 —— 上传文档后由 AI 解析成标准 CSV，再复用既有 doImport 入库 */
+      h += '<div class="imp-ai-panel">' +
+        '<p class="imp-warn">上传学习资料或试题文档，由 AI 自动识别题目、选项与答案</p>' +
+        '<div class="imp-drop">' +
+          '<div class="imp-drop-icons"><span class="imp-ficon imp-ficon-word">W</span><span class="imp-ficon imp-ficon-excel">X</span><span class="imp-ficon imp-ficon-text">T</span></div>' +
+          '<input type="file" id="imp-ai-file" data-action="imp-ai-file" accept=".xlsx,.xls,.docx,.doc,.csv,.tsv,.txt,.md,.pdf">' +
+          '<label class="imp-upload-btn" for="imp-ai-file">↑ 上传文档交给 AI</label>' +
+          '<p class="small muted">支持 Word / Excel / CSV / TSV / 文本；文件先在本机读取，再交由已配置的 AI 模型处理</p>' +
+        '</div>' +
+        '<div class="row"><button class="btn btn-primary" data-action="imp-ai-run">✦ AI 解析并导入</button>' +
+        '<span class="small ' + (aiReady ? 'muted' : 'faint') + '">' +
+          (aiReady ? 'AI 模型已就绪' : 'AI 未启用：请先在「数据与设置 → AI 模型配置」启用并保存模型') + '</span></div>' +
+        '<p class="small faint">AI 解析结果为标准 CSV，会带入内部输入区并沿用同一套 E001–E010 校验；解析结果请按页面提示核对。</p>' +
+        '</div>';
+    }
     /* ④ 隐藏的功能控件：承接上传解析结果、程序调用与自测，不在页面上展示 */
     h += '<div class="imp-hidden" style="display:none" aria-hidden="true">' +
       '<textarea id="imp-text" class="imp-text" placeholder="question_id,type,stem,option_a,...">' + esc(ui.text || '') + '</textarea>' +
@@ -188,6 +214,11 @@
           '<td><span class="badge ' + (x.ok ? 'b-green' : 'b-red') + '">' + (x.ok ? '解析成功 · 入库 ' + (x.inserted || 0) + ' 题' : '校验未通过 · ' + esc(x.code || 'E001')) + '</span></td></tr>').join('') +
         '</tbody></table></div>' : '<div class="empty"><span class="e-icon">▤</span>暂无上传记录</div>') +
       '</section>';
+
+    /* v1.12.3：试题表格编辑不再常驻侧栏，改为文档导入后出现，用于预览与编辑已导入文档 */
+    if (history.length) h += '<div class="row imp-after">' +
+      '<a class="btn btn-sm" href="#/bankGrid">✎ 预览并编辑已导入试题</a>' +
+      '<span class="small faint">在表格里逐题修改、报错检测后保存</span></div>';
 
     h += '</div>';
     return h;

@@ -1090,3 +1090,14 @@ tbody tr:focus-within td,[aria-selected="true"]>td{background:var(--primary-soft
 html[data-theme="dark"] .imp-upload-btn{color:#101828}
 .imp-hidden{display:none}
 @media(max-width:900px){.imp-tpl-grid{grid-template-columns:1fr}}
+
+/* ==================== v1.12.3 并列 AI 导入 / 高级模式 ==================== */
+.imp-modes{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--border)}
+.imp-mode{border:1px solid var(--border);background:var(--surface);color:var(--muted);border-radius:8px;padding:8px 18px;font-size:13px;cursor:pointer}
+.imp-mode:hover{border-color:var(--primary);color:var(--primary)}
+.imp-mode.on{background:var(--primary);border-color:var(--primary);color:#fff;font-weight:600}
+.imp-modes .small{margin-left:8px}
+.imp-ai-panel{margin-bottom:16px}
+.imp-ai-panel .row{align-items:center;gap:10px;margin-top:12px}
+.imp-after{margin-top:12px;align-items:center;gap:10px}
+html[data-theme="dark"] .imp-mode.on{color:#101828}
