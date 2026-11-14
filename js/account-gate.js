@@ -1,6 +1,7 @@
-/* v1.10.0 账号 + 密码登录 / 注册（纯增量）
-   进入页面强制登录：本地账号门（账号 + 密码），新账号即注册、已注册则登录，
-   每个账号的题库 / 练习记录 / 群组 / 设置按账号隔离保存（本机隔离，非服务端多租户）。
+/* v1.11.0 账号 + 密码登录 / 注册 + 管理员体系（纯增量）
+   进入页面强制登录：本地账号门（账号 + 密码），新账号即注册、已注册则登录。
+   首个注册的账号自动成为管理员，可管理所有注册账号与下发全站通知。
+   每个账号的题库 / 练习记录 / 群组 / 资料 / 设置按账号隔离保存（本机隔离，非服务端多租户）。
    数据仅存本机浏览器，跨设备请用「导出 JSON / 导入备份」迁移；
    未登录态底层不加载任何用户数据（__AUTH_GATE_LOCKED__ 拦截 seedIfEmpty）。 */
 (function (global) {
@@ -15,7 +16,8 @@
     'smartQuiz.v1', 'smartQuiz.prefs.v1', 'smartQuiz.runtimeSession.v1',
     'smartQuiz.exams.v1', 'smartQuiz.hubExam.v1', 'smartQuiz.groupIdentity.v1',
     'smartQuiz.groups.v1', 'smartQuiz.lastResetAt.v1', 'smartQuiz.theme.v1',
-    'smartQuiz.aiConfig.v1', 'smartQuiz.aiCache.v1', 'smartQuiz.aiUsage.v1'
+    'smartQuiz.aiConfig.v1', 'smartQuiz.aiCache.v1', 'smartQuiz.aiUsage.v1',
+    'smartQuiz.library.v1'
   ];
   const S = Quiz.accountGateState = {activeId: '', pendingLegacy: false, err: '', locked: false,
     mode: 'login'};
@@ -51,6 +53,92 @@
     Object.keys(obj || {}).forEach(k => { if (KEYS.indexOf(k) >= 0 && obj[k] != null) set(s, k, String(obj[k])); });
   }
   function hasMainData() { return !!get(LS(), 'smartQuiz.v1'); }
+
+  /* ---------------- v1.11.0 管理员 / 账号管理 ---------------- */
+  function publicUser(u) {
+    return {id: u.id, name: u.name, isAdmin: !!u.isAdmin, disabled: !!u.disabled,
+      createdAt: u.createdAt || 0, lastLoginAt: u.lastLoginAt || 0};
+  }
+  function users() { return readDir().users.map(publicUser); }
+  function isAdmin() {
+    if (!S.activeId) return false;
+    const u = readDir().users.filter(x => x.id === S.activeId)[0];
+    return !!(u && u.isAdmin);
+  }
+  function requireAdmin() {
+    if (!isAdmin()) return {ok: false, msg: '仅管理员可执行此操作'};
+    return null;
+  }
+  /* 只允许管理员改账号；不可删除自己的管理员身份或删除自己 */
+  function updateUser(id, patch) {
+    const denied = requireAdmin(); if (denied) return denied;
+    const d = readDir(), u = d.users.filter(x => x.id === id)[0];
+    if (!u) return {ok: false, msg: '账号不存在'};
+    if (typeof patch.name === 'string') {
+      const n = String(patch.name).trim().slice(0, 24);
+      if (!n) return {ok: false, msg: '账号不能为空'};
+      const dup = d.users.filter(x => x.name === n && x.id !== id)[0];
+      if (dup) return {ok: false, msg: '已有同名账号'};
+      u.name = n;
+    }
+    if (typeof patch.pass === 'string' && patch.pass) {
+      if (patch.pass.length < 4) return {ok: false, msg: '密码至少 4 位'};
+      u.passHash = util.hash(patch.pass);
+    }
+    if (typeof patch.disabled === 'boolean') {
+      if (id === S.activeId && patch.disabled) return {ok: false, msg: '不能停用当前登录的账号'};
+      u.disabled = patch.disabled;
+    }
+    if (typeof patch.isAdmin === 'boolean') {
+      if (id === S.activeId && !patch.isAdmin) return {ok: false, msg: '不能取消自己的管理员身份'};
+      u.isAdmin = patch.isAdmin;
+    }
+    writeDir(d);
+    return {ok: true, user: publicUser(u)};
+  }
+  function removeUser(id) {
+    const denied = requireAdmin(); if (denied) return denied;
+    if (id === S.activeId) return {ok: false, msg: '不能删除当前登录的账号'};
+    const d = readDir();
+    if (!d.users.some(x => x.id === id)) return {ok: false, msg: '账号不存在'};
+    d.users = d.users.filter(x => x.id !== id);
+    writeDir(d);
+    del(LS(), dataKey(id));
+    return {ok: true};
+  }
+  /* v1.11.0：已有账号目录若无管理员，把最早注册的账号升为管理员（一次性迁移） */
+  function ensureAdmin() {
+    const d = readDir();
+    if (!d.users.length) return false;
+    if (d.users.some(u => u.isAdmin)) return false;
+    const first = d.users.slice().sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0))[0] || d.users[0];
+    first.isAdmin = true;
+    writeDir(d);
+    return true;
+  }
+  /* 一次性清理历史遗留的内置示例题（含各账号快照），不触碰用户自建题目 */
+  function purgeLegacyDemo() {
+    const flag = 'smartQuiz.demoPurged.v1';
+    if (get(LS(), flag)) return 0;
+    let removed = 0;
+    const d = readDir();
+    d.users.forEach(u => {
+      const data = readData(u.id), raw = data['smartQuiz.v1'];
+      if (!raw) return;
+      try {
+        const st = JSON.parse(raw);
+        if (!st || !Array.isArray(st.questions)) return;
+        const kept = st.questions.filter(q => q.source !== '内置示例');
+        removed += st.questions.length - kept.length;
+        st.questions = kept;
+        (st.banks || []).forEach(b => { if (b.description && b.description.indexOf('内置示例') >= 0) b.description = '未指定归属的题目默认存放于此'; });
+        data['smartQuiz.v1'] = JSON.stringify(st);
+        writeData(u.id, data);
+      } catch (x) {}
+    });
+    set(LS(), flag, '1');
+    return removed;
+  }
   function userId(name) { return 'acct_' + util.hash(String(name)).slice(0, 10); }
   function currentName() {
     const d = readDir(), u = d.users.filter(x => x.id === S.activeId)[0];
@@ -140,6 +228,9 @@
     const u = d.users.filter(x => x.name === n)[0];
     if (!u) { S.err = '账号不存在，请先注册'; S.mode = 'register'; showGate(); return {ok: false, msg: S.err}; }
     if (u.passHash !== util.hash(p)) { S.err = '密码不正确'; showGate(); return {ok: false, msg: S.err}; }
+    if (u.disabled) { S.err = '该账号已被管理员停用'; showGate(); return {ok: false, msg: S.err}; }
+    const dd = readDir(), me = dd.users.filter(x => x.id === u.id)[0];
+    if (me) { me.lastLoginAt = util.now(); writeDir(dd); }
     activate(u.id);
     return {ok: true, id: u.id, name: u.name};
   }
@@ -152,7 +243,9 @@
     const d = readDir();
     const id = userId(n);
     if (d.users.some(x => x.id === id)) { S.err = '该账号已注册，请登录'; S.mode = 'login'; showGate(); return {ok: false, msg: S.err}; }
-    const u = {id, name: n, passHash: util.hash(p), createdAt: util.now()};
+    /* v1.11.0：首个注册的账号自动成为管理员 */
+    const u = {id, name: n, passHash: util.hash(p), createdAt: util.now(),
+      isAdmin: d.users.length === 0, disabled: false};
     d.users.push(u); writeDir(d);
     /* 首次注册：有历史数据则归入该账号，否则给一份干净的空空间 */
     writeData(id, S.pendingLegacy ? snapshot() : {});
@@ -242,6 +335,7 @@
 
   Quiz.accountGate = {state: S, KEYS, DIR_KEY, SESSION_KEY, DATA_PREFIX, boot, bootResult,
     login, doLogin, doRegister, submit, logout, onAction, snapshot, restore, clearActive, readDir, writeDir, readData, writeData,
-    gateHtml, showGate, hideGate, mountChip, userId, currentName, hasMainData};
+    gateHtml, showGate, hideGate, mountChip, userId, currentName, hasMainData,
+    users, isAdmin, requireAdmin, updateUser, removeUser, purgeLegacyDemo, ensureAdmin, publicUser};
   if (typeof module !== 'undefined' && module.exports) module.exports = Quiz.accountGate;
 })(typeof window !== 'undefined' ? window : globalThis);

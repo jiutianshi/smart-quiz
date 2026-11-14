@@ -68,7 +68,7 @@
 
   function defaultBanks() {
     const t = now();
-    return [{bank_id: DEFAULT_BANK_ID, name: '默认题库', description: '内置示例与未指定归属的题目默认存放于此',
+    return [{bank_id: DEFAULT_BANK_ID, name: '默认题库', description: '未指定归属的题目默认存放于此',
              is_default: true, created_at: t, updated_at: t}];
   }
 
@@ -373,6 +373,8 @@
   function seedIfEmpty() {
     /* v1.7.0：未登录时登录门已清空活动数据，禁止示例数据写回，避免污染账号隔离区 */
     if (global.__AUTH_GATE_LOCKED__) return false;
+    /* v1.11.0：站点不再生成任何内置示例题；Node 自测未设置此开关，仍可造数据 */
+    if (global.__NO_DEMO_DATA__) return false;
     const s = read();
     if (s.questions.length) return false;
     const t = now();
@@ -390,7 +392,18 @@
     save(); return true;
   }
 
+  /* v1.11.0：清理当前活动数据里的内置示例题（用户自建题目不受影响） */
+  function purgeDemo() {
+    try {
+      return store.mutate(s => {
+        const before = s.questions.length;
+        s.questions = s.questions.filter(q => q.source !== '内置示例');
+        return before - s.questions.length;
+      });
+    } catch (x) { return 0; }
+  }
   Quiz.seedIfEmpty = seedIfEmpty;
+  Quiz.purgeDemo = purgeDemo;
   Quiz.DEFAULT_CONFIG = DEFAULT_CONFIG;
   Quiz.DEFAULT_BANK_ID = DEFAULT_BANK_ID;
   Quiz.ALL_BANKS = ALL_BANKS;

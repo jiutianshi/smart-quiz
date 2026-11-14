@@ -1031,3 +1031,35 @@ tbody tr:focus-within td,[aria-selected="true"]>td{background:var(--primary-soft
 @media(prefers-reduced-motion:reduce){
   *,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}
 }
+
+/* ==================== v1.11.0 管理员 / 资料库 / 排版修正 ==================== */
+/* 第 10 条：搜索框与按钮同一行，水平排布、垂直居中 */
+.bo-toolbar-top{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:0}
+.bo-toolbar-top .grow{flex:1 1 16px;min-width:8px}
+.bo-toolbar-top .tb-search{flex:0 1 230px;max-width:230px;height:32px;margin:0}
+.bo-toolbar-top .btn,.bo-toolbar-top .dropdown,.bo-toolbar-top input{align-self:center}
+@media(max-width:1000px){.bo-toolbar-top .grow{flex-basis:100%;height:0}.bo-toolbar-top .tb-search{flex:1 1 180px}}
+
+/* 管理后台 */
+.adm-head,.lib-head{margin:0 0 16px}
+.adm-head h2,.lib-head h2{margin:0 0 4px;font-size:16px;font-weight:600}
+.adm-head p,.lib-head p{margin:0}
+.adm-tabs,.lib-tabs{display:flex;gap:4px;border-bottom:1px solid var(--border);margin:0 0 16px}
+.adm-tabs .tab,.lib-tabs .tab{border:0;background:transparent;padding:8px 16px;font-size:13px;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;border-radius:0}
+.adm-tabs .tab.on,.lib-tabs .tab.on{color:var(--primary);border-bottom-color:var(--primary);font-weight:600}
+.adm-toolbar{display:flex;align-items:center;gap:8px;margin-bottom:12px}
+.adm-toolbar input{max-width:220px}
+.adm-edit-row>td{background:var(--surface-2)}
+.adm-edit-form{padding:12px}
+.adm-notice{padding:12px 0;border-bottom:1px solid var(--border)}
+.adm-notice:last-child{border-bottom:none}
+
+/* 资料库 */
+.lib-upload{margin-bottom:16px}
+.lib-upload .row{align-items:center}
+.lib-preview{margin-bottom:12px}
+.lib-media{margin-top:12px;text-align:center}
+.lib-text{max-height:520px;overflow:auto;white-space:pre-wrap;word-break:break-word;margin:12px 0 0}
+
+/* 表格行状态延续 v1.10.0 覆盖层 */
+.tbl tbody tr:hover td{background:var(--surface-2)}

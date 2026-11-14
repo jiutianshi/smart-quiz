@@ -666,30 +666,15 @@
   P.records = function (app) {
     const s = Quiz.store.state();
     const list = s.sessions.slice().reverse();
-    /* v1.4.3：统一三源汇总 + 来源诊断，避免用户只做模拟考试/未交卷时看到空白 */
-    let h = (Quiz.recordsDiag && Quiz.recordsDiag.html) ? Quiz.recordsDiag.html() : '';
-    /* v1.4.4：逐题实时记录，答完一题即可见，不等交卷 */
-    const live = s.records.slice().reverse().slice(0, 30);
-    h += card('逐题作答记录', '每答一题立即写入本机，无需交卷；显示最近 30 条',
-      live.length ? '<div class="table-wrap"><table><thead><tr><th>时间</th><th>题干</th><th>你的作答</th><th>正确答案</th><th>判定</th><th>得分</th><th>会话</th></tr></thead><tbody>' +
-        live.map(r => {
-          const q = r.question_snapshot || {};
-          return '<tr><td class="nowrap">' + fmt(r.answered_at) + '</td>' +
-            '<td><div class="ellip" style="max-width:300px">' + esc(q.stem || '') + '</div></td>' +
-            '<td class="mono">' + esc(userAnswerText(r)) + '</td><td class="mono">' + esc(q.answer ? answerText(q) : '—') + '</td>' +
-            '<td>' + statusBadge(r.status) + '</td><td>' + r.score + '/' + r.max_score + '</td>' +
-            '<td class="mono small">' + esc(String(r.session_id || '').slice(0, 16)) + '</td></tr>';
-        }).join('') +
-        '</tbody></table></div>' : empty('还没有作答记录；答完第一题后这里立即出现', '◷'));
-    h += card('练习会话', '每条记录可下钻到逐题明细，明细保留题目快照与来源会话；仅列已交卷归档的会话',
+    /* v1.11.0：按需求移除「答题记录·来源诊断与汇总」「全部答题记录」「逐题作答明细（实时）」展示，
+       仅保留已归档练习会话列表；底层作答数据仍照常记录，不影响统计与判分口径。 */
+    let h = card('练习会话', '已交卷归档的练习会话，可下钻查看逐题明细',
       list.length ? '<div class="table-wrap"><table><thead><tr><th>时间</th><th>模式</th><th>题数</th><th>正确</th><th>部分</th><th>错误</th><th>正确率</th><th>得分率</th><th>用时</th><th></th></tr></thead><tbody>' +
         list.map(x => '<tr><td class="nowrap">' + fmt(x.started_at) + '</td><td>' + badge(MODE_LABEL[x.mode] || x.mode, 'b-blue') + '</td><td>' + x.question_count + '</td>' +
           '<td>' + x.correct_count + '</td><td>' + x.partial_count + '</td><td>' + x.wrong_count + '</td>' +
           '<td>' + pct(x.accuracy*100) + '</td><td>' + pct(x.score_rate*100) + '</td><td>' + fmtDur(x.duration_ms) + '</td>' +
           '<td><span class="link" data-action="records-detail" data-id="' + esc(x.session_id) + '">查看明细</span></td></tr>').join('') +
-        '</tbody></table></div>' : '<div class="empty"><span class="e-icon">◷</span>暂无已交卷归档的练习会话；进行中练习与模拟考试见上方「全部答题记录」</div>');
-    h += card('数据追溯说明', '',
-      '<div class="small muted">每条作答明细包含 <span class="mono">question_snapshot</span>（题目完整快照）、<span class="mono">question_version</span>、<span class="mono">session_id</span>、<span class="mono">source</span> 与 <span class="mono">answered_at</span>。题目后续编辑或删除不影响历史会话与统计。</div>');
+        '</tbody></table></div>' : '<div class="empty"><span class="e-icon">◷</span>还没有已交卷归档的练习会话</div>');
     return h;
   };
 
@@ -757,98 +742,6 @@
       '<button class="btn btn-sm" data-action="ai-clear-usage">清空调用记录</button></div>' +
       '<div id="ai-test-result" class="small muted" style="margin-top:10px">预设仅自动填充地址与模型；云端服务商可能不允许浏览器直连（CORS），请先点「测试连接」确认；本地 Ollama 通常需设置 OLLAMA_ORIGINS 放行来源。</div>');
 
-    h += card('AI 调用记录与隐私', '只记录时间、类型、模型与字符量，不记录题目内容；最近 8 条',
-      '<div class="table-wrap"><table><thead><tr><th>时间</th><th>类型</th><th>模型</th><th>字符数</th><th>结果</th><th>错误摘要</th></tr></thead><tbody>' +
-      (usageRows || '<tr><td colspan="6" class="small muted">暂无调用记录</td></tr>') + '</tbody></table></div>' +
-      '<ul class="ai-privacy">' +
-      '<li>所有 AI 调用均为<b>手动触发</b>：题目点「AI 讲解」、导入页点「用 AI 解析」才会发生请求；关闭 AI 不影响任何核心功能。</li>' +
-      '<li>API Key 只保存在本机浏览器 localStorage 的独立键中，界面与接口都不回显完整值，<b>不会包含在「导出全部数据」的 JSON 备份里</b>。</li>' +
-      '<li>本版为纯前端，请求由浏览器直连模型服务（非服务端代理）；请自行确认服务商的跨域与计费规则，Key 会随请求发送到你所填的地址。</li>' +
-      '<li>逐题讲解按题目指纹 + 模型名本地缓存，同题同模型不重复调用；讲解文本与调用记录均独立于题库数据，清空题库不会自动删除。</li>' +
-      '<li>AI 生成的讲解仅供参考，最终答案以题库解析与判分结果为准。</li>' +
-      '</ul>');
-
-    h += card('界面主题与快捷键', '主题三态持久化，跟随系统时自动响应系统切换；快捷键仅在刷题页生效',
-      '<div class="row" style="margin-bottom:14px"><label class="field" style="max-width:220px">界面主题' +
-      selHtml('cfg-theme', 'theme-set', [{v:'system',l:'跟随系统'},{v:'light',l:'浅色'},{v:'dark',l:'深色'}], app.ui.theme || 'system') + '</label>' +
-      '<span class="small muted">也可点击右上角按钮依次切换</span></div>' +
-      '<div class="table-wrap"><table><thead><tr><th>按键</th><th>作用</th></tr></thead><tbody>' +
-      '<tr><td><kbd class="kbd">A</kbd>–<kbd class="kbd">F</kbd> / <kbd class="kbd">1</kbd>–<kbd class="kbd">6</kbd></td><td>选择对应选项（多选可反复按切换）；判断题用 <kbd class="kbd">T</kbd>/<kbd class="kbd">F</kbd> 或 <kbd class="kbd">1</kbd>/<kbd class="kbd">2</kbd></td></tr>' +
-      '<tr><td><kbd class="kbd">Enter</kbd></td><td>提交本题；已作答时进入下一题</td></tr>' +
-      '<tr><td><kbd class="kbd">←</kbd> / <kbd class="kbd">→</kbd></td><td>上一题 / 暂存并下一题</td></tr>' +
-      '<tr><td><kbd class="kbd">Esc</kbd></td><td>关闭弹窗</td></tr>' +
-      '<tr><td>输入框聚焦或弹窗打开时</td><td>快捷键自动禁用，避免误触</td></tr>' +
-      '</tbody></table></div>');
-
-    h += card('数据管理', '全部数据保存在浏览器本地存储，可导出为 JSON 备份或迁移到另一台设备',
-      '<div class="row"><button class="btn" data-action="settings-export">导出全部数据（JSON）</button>' +
-      '<label class="btn" style="cursor:pointer">导入备份<input type="file" id="settings-file" data-action="settings-file" accept=".json" style="display:none"></label>' +
-      '<button class="btn btn-danger" data-action="settings-reset">清空所有数据</button></div>' +
-      '<div class="small faint" style="margin-top:10px">存储状态：' + (Quiz.store.isFallback() ? '内存模式（本地存储不可用，刷新会丢失，请立即导出备份）' : '正常（localStorage）') + '</div>');
-
-    h += card('版本与备份', '代码版本由 git 管理，浏览器数据由上方 JSON 备份管理，两者互不替代',
-      '<div class="table-wrap"><table><thead><tr><th>版本</th><th>内容</th><th>恢复命令</th></tr></thead><tbody>' +
-      '<tr><td class="mono">v0.1.0-baseline</td><td>改动前基线：9 个功能页面 + Excel / Word 导入</td><td class="mono">git reset --hard v0.1.0-baseline</td></tr>' +
-      '<tr><td class="mono">v0.2.0</td><td>答题交互优化：选项随机、题型配额、答题卡、草稿答案、只读回看、交卷确认</td><td class="mono">git reset --hard v0.2.0</td></tr>' +
-      '<tr><td class="mono">v0.3.0</td><td>三态主题、键盘快捷键、偏好记忆、结果按状态筛选</td><td class="mono">git reset --hard v0.3.0</td></tr>' +
-      '<tr><td class="mono">v0.4.0</td><td>AI 模型配置（可选）、逐题 AI 讲解与缓存、导入 AI 兜底解析、调用记录与隐私说明</td><td class="mono">git reset --hard v0.4.0</td></tr>' +
-      '<tr><td class="mono">v0.5.0</td><td>题库分层：先选择题库再编辑该库试题、新建/重命名/删除题库（题目迁回默认库）、批量移动、导入与组卷按题库、旧数据自动迁移</td><td class="mono">git reset --hard v0.5.0</td></tr>' +
-      '<tr><td class="mono">v0.6.0</td><td>导入页精简：移除「下载 CSV 模板 / 复制示例到输入框 / 格式 · 字段 · 错误码」三个辅助按钮，保留 Excel / Word 模板下载与示例预览</td><td class="mono">git reset --hard v0.6.0</td></tr>' +
-      '<tr><td class="mono">v0.7.0</td><td>模板改为考试宝 Excel / Word 真实文件（离线内嵌）、删除示例预览框；新增中文表头与说明行解析、Word 纯段落解析、8 选项与中文题型/难度映射</td><td class="mono">git reset --hard v0.7.0</td></tr>' +
-      '<tr><td class="mono">v0.8.0</td><td>单选 / 判断选完即判（答对且开启自动前进才跳题）；答题页两栏改版 + 设置面板（10 项）、答题卡统计、笔记 / 标记 / 标签、难度星级、护眼与字号</td><td class="mono">git reset --hard v0.8.0</td></tr>' +
-      '<tr><td class="mono">v0.9.0</td><td>导航改版：一级 6 组 + 二级 12 项；题库中心 4 页、考试管理 2 页（三步向导 + 历史）、账户中心 6 页按参考图布局；账户中心 / 资料库 / 我的群组为在线模式预留，仅布局不实现功能；原有 8 个功能入口完整保留</td><td class="mono">git reset --hard v0.9.0</td></tr>' +
-      '<tr><td class="mono">v1.0.0</td><td>题库练习模式：我的题库「练习」进入选择页（14 个功能入口）；新增我的收藏 / 斩题 / 笔记 / 查看练习 / 章节 / 题型 6 页、随机练习弹窗、模拟考试四阶段（配置 → 考试 → 成绩 → 错题明细）；通用答题页复用既有练习状态机</td><td class="mono">git reset --hard v1.0.0</td></tr>' +
-      '<tr><td class="mono">v1.0.1</td><td>全站自检与优化：修复 6 处功能细节（考试只读详情、笔记弹窗、合计实时刷新、答题卡题型、默认题数收敛、题库上下文透传）；修复窄屏 inline 栅格与 flex 撑宽根因，桌面/窄屏全路由零溢出</td><td class="mono">git reset --hard v1.0.1</td></tr>' +
-      '<tr><td class="mono">v1.1.0</td><td>侧栏 3 个分组默认收起；删除「原有功能」组，「数据与设置」提为第 7 个一级项；「查看练习数据」改为正确率圆盘 + 近 7 天柱状图大卡片，答题页弹窗与独立页共用；无数据时显示空态</td><td class="mono">git reset --hard v1.1.0</td></tr>' +
-      '<tr><td class="mono">v1.1.1</td><td>练习记录多源合并：已归档会话 + 未交卷进行中练习 + 模拟考试历史，修复练习后无数据；删除首页「全部功能」卡片与练习数据弹窗「查看本轮逐题明细」</td><td class="mono">git reset --hard v1.1.1</td></tr>' +
-      '<tr><td class="mono">v1.2.0</td><td>云端账号（可选）：OTP 验证码登录 / 注册、quiz_state 表 RLS 按用户隔离、跨设备同步；未登录仍为纯本地模式</td><td class="mono">git reset --hard v1.2.0</td></tr>' +
-      '<tr><td class="mono">v1.3.0</td><td>文档导入新旧格式同时支持：新增 .xls（OLE2 + BIFF8 / SST 分片）与 .doc（FIB + CLX 片表）本机解析，兼容 HTML / CSV / RTF 伪格式；移除「请另存为 .xlsx / .docx」提示</td><td class="mono">git reset --hard v1.3.0</td></tr>' +
-      '<tr><td class="mono">v1.3.1</td><td>修复非应用域名下的云登录误导：不再展示必然失败的验证码表单，改为可点击的应用发布链接引导；顶栏与账户中心显示「本地模式」，避免 Failed to fetch</td><td class="mono">git reset --hard v1.3.1</td></tr>' +
-      '<tr><td class="mono">v1.3.2</td><td>文档导入改为按文件内容而非扩展名分流（修复 .xls 改名为 .xlsx 报「缺少 ZIP 目录」）；本地静态资源加版本号，消除浏览器缓存旧 JS</td><td class="mono">git reset --hard v1.3.2</td></tr>' +
-      '<tr><td class="mono">v1.3.3</td><td>新增文档导入校验页：选择表单（支持多 Sheet）/ 表头行 / 逐列字段匹配弹窗、预览前 8 条与格式检查；确认后复用原有导入校验链，既有入口全部保留</td><td class="mono">git reset --hard v1.3.3</td></tr>' +
-      '<tr><td class="mono">v1.4.0</td><td>试题表格编辑：先选题库 → 表格内直接改题干 / 选项A–H / 答案 / 解析 / 章节 / 难度 → 复用 E001–E010 逐行报错检测 → 只看报错 / 重新检测 / 下载表格 / 保存；题库管理与导入校验页各一个入口，导入纠错后复用原导入链</td><td class="mono">git reset --hard v1.4.0</td></tr>' +
-      '<tr><td class="mono">v1.4.1</td><td>导入失败诊断与修复：E001 表头错误显示真实原因与「为什么导入不了」诊断卡（当前列 / 缺失必填列 / 未识别列）、一键从「正确答案：C」文本提取答案补齐 answer 列、解析阶段预警未识别必填列、补充中文表头别名</td><td class="mono">git reset --hard v1.4.1</td></tr>' +
-      '<tr><td class="mono">v1.4.2</td><td>做题记录不显示修复：云登录 pull 改为合并本地/远端练习历史（不再整份覆盖抹掉记录）、清空数据时间戳保护；练习记录页新增来源诊断卡（域名 / 存储模式 / 会话数 / 云账号 / 空态原因与迁移入口）</td><td class="mono">git reset --hard v1.4.2</td></tr>' +
-      '<tr><td class="mono">v1.4.3</td><td>答题记录仍不显示修复：已归档会话 / 未交卷进行中练习 / 模拟考试三源统一汇总表 + 全站来源诊断（版本 / 站点 / 存储键 / 空态 5 条原因），刷题记录、练习记录、查看练习数据三页共用</td><td class="mono">git reset --hard v1.4.3</td></tr>' +
-      '<tr><td class="mono">v1.4.4</td><td>每答一题立即记录：判分完成即写入作答明细（无需交卷）、交卷按复合键去重不重复计数；首页累计作答 / 正确率、练习记录按日统计、查看练习数据近 7 天、刷题记录逐题明细全部实时可见</td><td class="mono">git reset --hard v1.4.4</td></tr>' +
-      '<tr><td class="mono">v1.5.0</td><td>题库「更多操作」十项：置顶 / 重命名 / 移动（分组） / 导出 CSV·JSON / 练习设置 / 自定义题型 / 编辑章节 / 设置封面 / 配置模拟考试模板 / 删除；工具栏合并题库与批量分享、类别 / 章节目录 / 任务方式列、分组与时间筛选、悬浮上传按钮；全部设置接入组卷、章节练习、题型练习与模拟考试</td><td class="mono">git reset --hard v1.5.0</td></tr>' +
-      '<tr><td class="mono">v1.5.1</td><td>我的题库列表重新排版：十列全部单行不换行（名称 / 类别 / 创建时间不再竖排）、列宽固定与紧凑行高、操作列五个入口同一行、工具栏拆成动作与筛选两行；「更多」十项菜单改 fixed 浮层，不再被表格与面板裁切，视口不足自动向上展开</td><td class="mono">git reset --hard v1.5.1</td></tr>' +
-      '<tr><td class="mono">v1.5.2</td><td>按参考图移除红框内容：工具栏「全部分组 / 全部时间 / 图文模式」三个控件、表格「类别」列、「章节目录 / 任务方式」两列；列表精简为 7 列并重新映射列宽，底层题库配置与十项菜单功能保留</td><td class="mono">git reset --hard v1.5.2</td></tr>' +
-      '<tr><td class="mono">v1.6.0</td><td>群组功能：输入群号即可加入群组；创建群组（名称 / 介绍 / 加入方式 / 口令 / 绑定题库）、群组搜索抽屉、我创建的与我加入的分组、审核申请、身份切换、群组目录导入导出；绑定题库可直达练习与练习数据</td><td class="mono">git reset --hard v1.6.0</td></tr>' +
-      '<tr><td class="mono">v1.7.0</td><td>进入页面强制登录：本地账号（用户名 + 口令，首次输入即注册），未登录不加载任何业务数据；每个账号的题库 / 练习记录 / 群组 / 设置按快照分区隔离，退出与切换先存回再清空；首次启用保留本机历史数据供认领</td><td class="mono">git reset --hard v1.7.0</td></tr>' +
-      '<tr><td class="mono">v1.8.0</td><td>强制登录改为云端「登录 / 注册」验证码弹窗：应用域名下进入页面自动弹出（手机号 / 邮箱 OTP，首次自动注册），未登录不可关闭；登录后按云端账号隔离数据，切换账号自动清空本机残留；非应用域名降级为本地账号门并引导到应用发布链接</td><td class="mono">git reset --hard v1.8.0</td></tr>' +
-      '<tr><td class="mono">v1.8.1</td><td>修复邮箱验证码注册：发码补充 emailRedirectTo（云端邮件模板需回跳链接才能正确发出）；邮箱标签页新增「未收到邮件请检查垃圾箱或改用手机号」提示</td><td class="mono">git reset --hard v1.8.1</td></tr>' +
-      '<tr><td class="mono">v1.9.0</td><td>登录改为本地账号 + 密码（注册即建账号、已注册则登录，登录 / 注册可切换）；云端验证码退为应用域名下的可选同步，不再作为进入门槛；重做登录页为左右分栏（品牌面板 + 表单），去掉背景渐变，按 unslop / impeccable 梳理间距与圆角，补键盘 focus 描边与按压反馈</td><td class="mono">git reset --hard v1.9.0</td></tr>' +
-      '<tr><td class="mono">v1.9.1</td><td>登录页账号输入框占位符由「用户名 / 手机号」改为「请输入账号」，去除手机号暗示，明确只需账号 + 密码；版本号随升</td><td class="mono">git reset --hard v1.9.1</td></tr>' +
-      '<tr><td class="mono">v1.10.0</td><td>删除云端同步功能：移除云账号 SDK / 验证码登录 / 跨设备同步整套代码与入口，账号体系回归纯本地（账号 + 密码，按账号隔离）；清理诊断页与群组页的云端文案，顶栏不再显示云端同步按钮。同时按 unslop 做一轮排版复核：统一 4px 间距栅格、嵌套圆角、弱化全 pill 控件、补齐 focus 描边与表格行状态</td><td class="mono">git reset --hard v1.10.0</td></tr>' +
-      '</tbody></table></div>' +
-      '<div class="small faint" style="margin-top:10px">查看全部还原点：git tag -n；查看提交历史：git log --oneline --decorate。恢复代码后若浏览器数据结构不兼容，再导入对应时期的 JSON 备份。</div>');
-
-    h += card('实现说明', '与《功能方案》的对应关系',
-      '<div class="table-wrap"><table><thead><tr><th>方案条目</th><th>本实现</th></tr></thead><tbody>' +
-      '<tr><td>结构化答案 / 题型注册表</td><td>answer 对象 + TYPE_REGISTRY（validate / normalize / score 三方法扩展点）</td></tr>' +
-      '<tr><td>四态判分与部分得分</td><td>correct / partial / wrong / unanswered；多选漏选按比例，含错选默认 0</td></tr>' +
-      '<tr><td>正确率与得分率分列</td><td>aggregate() 分别计算并落库，统计页分别展示</td></tr>' +
-      '<tr><td>题目快照与追溯</td><td>answer_records.question_snapshot + version + session_id + source；选项随机映射 option_map 一并归档</td></tr>' +
-      '<tr><td>内容指纹去重</td><td>本地同步 FNV-1a 指纹（无外部服务）；L1 按 ID、L2 按指纹进人工确认队列</td></tr>' +
-      '<tr><td>导入错误码</td><td>E001–E010 / W001，整批原子或跳过错误行</td></tr>' +
-      '<tr><td>文档导入格式</td><td>Excel .xlsx / .xls（OLE2 + BIFF8）、Word .docx / .doc（FIB + 片表）、CSV / TSV，本机零依赖解析，支持中文表头别名与 HTML/RTF 伪格式兼容</td></tr>' +
-      '<tr><td>答题交互增强</td><td>选项随机映射 / 题型配额组卷 / 答题卡跳题 / 草稿答案 / 只读回看 / 断点续练 / 交卷确认（参考 shuatixia，纯增量）</td></tr>' +
-      '<tr><td>界面偏好</td><td>三态主题（跟随系统 / 浅色 / 深色）+ 组卷与导入配置记忆，独立于题库数据存储</td></tr>' +
-      '<tr><td>题库分层（v0.5.0）</td><td>banks 一级实体 + 题目 bank_id；先选库再编辑，删除库题目迁回默认库；旧备份无 banks 时自动迁移，零数据丢失</td></tr>' +
-      '<tr><td>考试宝模板（v0.7.0）</td><td>模板文件内嵌 base64 离线下载；Excel 跳过说明行按中文表头解析、Word 支持纯段落文本；选项扩至 A–H</td></tr>' +
-      '<tr><td>可选 AI 能力</td><td>OpenAI 兼容模型配置（Key 独立存储、脱敏、不入备份）、逐题讲解缓存、导入兜底解析、仅记字符量的用量审计；手动触发、默认关闭</td></tr>' +
-      '<tr><td>答题页设置（v0.8.0）</td><td>编辑试题 / 答对自动下一题 / 背题模式 / 选项乱序 / 开启AI解析 / 护眼模式 / 每组题数 / 连续做对 / 字体大小 / 收起；偏好独立持久化，与组卷配置双向同步</td></tr>' +
-      '<tr><td>选完即判（v0.8.0）</td><td>练习模式的单选与判断题选择后自动判分并展示反馈；答对且开启自动前进才自动跳题，答错停留手动翻页；多选题、考试模式、交卷后统一反馈、背题模式保持原交互</td></tr>' +
-      '<tr><td>逐题笔记与标记（v0.8.0）</td><td>notes / marks 可选字段随备份导出；单题统计展示本人总答与全体作答（本机全部归档记录）</td></tr>' +
-      '<tr><td>导航与业务分区（v0.9.0）</td><td>深色一级 / 二级折叠侧栏；题库中心、考试管理、账户中心按参考图布局；截图中的题库 / 试题 / 账号均为示例未写入；账户中心为在线模式预留，控件禁用；排行榜标注在线模式跨用户数据</td></tr>' +
-      '<tr><td>题库练习模式（v1.0.0）</td><td>练习选择页 14 个入口；顺序 / 随机 / 章节 / 题型 / 精简 / 易错练习复用既有通用答题页；模拟考试含倒计时、答题卡、交卷成绩与错题明细，历史存独立 key；截图示例数据未写入</td></tr>' +
-      '<tr><td>自检优化（v1.0.1）</td><td>全路由运行时巡检零错误；窄屏改用 CSS 类栅格并修复 flex 子项 min-width 撑宽；配置页合计局部刷新；考试/笔记「查看」改为只读详情弹窗；子页链接透传题库参数</td></tr>' +
-      '<tr><td>导航与练习数据（v1.1.0）</td><td>7 个一级项并列、分组默认收起；数据与设置提级；查看练习数据为正确率圆盘 + 近 7 天柱状图大卡片，答题页弹窗与整页共用，数据取本机归档、无记录显空态</td></tr>' +
-      '<tr><td>练习数据口径（v1.1.1）</td><td>练习记录与查看练习数据卡片同时统计已归档会话、进行中未交卷练习与本机模拟考试；模拟考试历史按真实汇总字段累加，不伪造逐题记录；首页快捷卡片与弹窗逐题明细折叠区已移除</td></tr>' +
-      '<tr><td>旧版 Office 导入（v1.3.0）</td><td>.xls / .doc 由 js/legacy-office.js 在本机解 OLE2/CFB、BIFF8 与 Word97 片表，输出同一二维数组后复用 adaptRows / docxTextToRows / toCsv；新旧格式共用 E001–E010 校验、去重与人工确认队列；无网络依赖、不上传文件</td></tr>' +
-      '<tr><td>内容嗅探导入（v1.3.2）</td><td>readAuto 按魔数识别 OLE2 / ZIP / 文本，ZIP 再按包内 xl/ 或 word/ 区分 xlsx / docx；扩展名错配、HTML 表格与 GBK CSV 均可正确解析</td></tr>' +
-      '</tbody></table></div>');
     return h;
   };
 

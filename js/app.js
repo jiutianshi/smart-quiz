@@ -26,14 +26,15 @@
     practiceRecords:['练习记录','练习数据、排行榜与累计练习'],
     examNew:['新增考试','创建考试 → 试题设置 → 考试设置'],
     examHistory:['考试历史','本机已创建考试列表'],
-    library:['资料库','在线模式预留'],
+    library:['资料库','上传与管理学习资料'],
     groups:['我的群组','创建 / 按群号加入群组、组织题库练习'],
-    account:['账户信息','在线模式预留 · 仅布局'],
-    orders:['我的订单','在线模式预留 · 仅布局'],
-    reports:['试题报错','在线模式预留 · 仅布局'],
-    messages:['消息中心','在线模式预留 · 仅布局'],
-    downloads:['文档下载','在线模式预留 · 仅布局'],
-    trash:['回收站','在线模式预留 · 仅布局'],
+    account:['账户信息','账号资料与扩展字段'],
+    orders:['我的订单','订单列表'],
+    reports:['试题报错','试题问题反馈'],
+    messages:['消息中心','管理员下发的全站通知'],
+    downloads:['文档下载','资料与文档下载'],
+    trash:['回收站','已删除内容'],
+    admin:['管理后台','账号管理、通知下发与数据概览'],
     /* v1.0.0 题库练习模式 */
     practiceHub:['练习选择','题库练习模式：选择练习方式'],
     hubFavorites:['我的收藏','收藏分布与按题型练习'],
@@ -53,6 +54,7 @@
     examNew:'exam', examHistory:'exam',
     account:'account', orders:'account', reports:'account', messages:'account', downloads:'account', trash:'account'
   };
+  /* v1.11.0：管理后台只对管理员可见，普通用户访问路由时由页面本身给出无权限提示 */
 
   const app = Quiz.app = {
     route: 'dashboard',
@@ -264,7 +266,7 @@
       });
     } catch (err) {}
   }
-  function navTodo(msg) { toast(msg || '该功能为在线模式预留，本机版暂不提供', 'ok'); }
+  function navTodo(msg) { toast(msg || '该功能暂未开放', 'ok'); }
   function navSearch(target) {
     const st = navState(); if (!st || !st[target]) return;
     const id = target === 'examHistory' ? 'examhis-kw' : 'mybanks-kw';
@@ -330,6 +332,12 @@
       aiBtn.className = 'btn btn-ghost' + (on ? ' ai-on' : '');
     }
     document.querySelectorAll('[data-nav]').forEach(a => a.classList.toggle('active', a.dataset.nav === route));
+    /* v1.11.0：管理后台入口仅管理员可见 */
+    const adminNav = $('nav-admin');
+    if (adminNav) {
+      const isAdm = !!(Quiz.accountGate && Quiz.accountGate.isAdmin && Quiz.accountGate.isAdmin());
+      adminNav.style.display = isAdm ? '' : 'none';
+    }
     applyNav();
     try {
       document.querySelectorAll('[data-block]').forEach(b => {
@@ -341,7 +349,7 @@
     const s = store.state();
     $('side-count').textContent = s.questions.length + ' 题 · ' + s.records.length + ' 条作答记录';
     $('storage-dot').className = 'dot' + (store.isFallback() ? ' bad' : '');
-    $('storage-text').textContent = store.isFallback() ? '内存模式（请导出备份）' : '本地存储';
+    $('storage-text').textContent = store.isFallback() ? '内存模式（请导出备份）' : '数据已保存';
     if (route === 'practice' && app.practice && !app.practice.finished) startTimer();
     window.scrollTo({top:0, behavior:'auto'});
   }
@@ -907,7 +915,7 @@
         if (st) { collectExam(); st.exam.picking = !st.exam.picking; render(); }
         break;
       }
-      case 'exam-add-field': navTodo('自定义登录信息项为在线模式功能，本机版暂不提供'); break;
+      case 'exam-add-field': navTodo('自定义登录信息项暂未开放'); break;
       case 'exam-finish': {
         const st = navState(); if (!st) break;
         collectExam();
@@ -1226,8 +1234,8 @@
       }
       case 'settings-reset':
         if (confirm('⚠️ 将清空全部题目、练习记录、错题与收藏，且不可恢复。建议先导出备份。确认继续？')) {
-          store.reset(); Quiz.seedIfEmpty(); app.practice = null; app.result = null; app.ui.imp.report = null;
-          location.hash = '#/dashboard'; render(); toast('数据已清空并恢复内置示例题', 'ok');
+          store.reset(); app.practice = null; app.result = null; app.ui.imp.report = null;
+          location.hash = '#/dashboard'; render(); toast('数据已清空', 'ok');
         }
         break;
     }
@@ -1377,6 +1385,12 @@
 
   /* ---------- 启动 ---------- */
   Quiz.seedIfEmpty();
+  /* v1.11.0：仅真实站点（__NO_DEMO_DATA__）清理内置示例题；Node 自测保持原有种子数据 */
+  if (global.__NO_DEMO_DATA__) {
+    if (Quiz.purgeDemo) Quiz.purgeDemo();
+    if (Quiz.accountGate && Quiz.accountGate.purgeLegacyDemo) Quiz.accountGate.purgeLegacyDemo();
+  }
+  if (Quiz.accountGate && Quiz.accountGate.ensureAdmin) Quiz.accountGate.ensureAdmin();
   restorePrefs();
   render();
 })(typeof window !== 'undefined' ? window : globalThis);

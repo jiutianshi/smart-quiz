@@ -1,6 +1,6 @@
 /* v1.6.0 群组功能（纯增量，参考三张图）
    核心：用户可输入群号（群组 id）加入群组。
-   本机模式：群组目录挂在 store 主 state 的 groups（随导出备份与云同步一起走）；
+   群组目录挂在 store 主 state 的 groups，随导出备份一起保存；
    成员身份是本机可切换的「本机身份」，可模拟多人申请/审核；
    跨设备通过「导出 / 导入群组目录」共享群号，不虚构任何第三方服务端。
    事件用 data-action^="grp-" + stopImmediatePropagation 隔离，避免 app.js 通用 render 干扰。 */
@@ -247,10 +247,6 @@
       '<button class="btn btn-primary grp-create" data-action="grp-create-open">＋ 创建群组</button>' +
       section('created', '我创建的群组', created) +
       section('joined', '我加入的群组', joined) +
-      '<div class="grp-identity"><div class="small muted" style="margin-bottom:6px">当前身份：' + e(me.name) +
-        '（切换身份可模拟其他成员加入 / 审核）</div>' +
-        '<div class="row" style="gap:6px"><input type="text" id="grp-identity-name" placeholder="输入昵称切换本机身份" value="' + e(me.name) + '">' +
-        '<button class="btn btn-sm" data-action="grp-identity-save">切换</button></div></div>' +
       '<div class="row" style="gap:8px;margin-top:12px;flex-wrap:wrap">' +
         '<button class="btn btn-sm" data-action="grp-export">导出群组目录</button>' +
         '<button class="btn btn-sm" data-action="grp-import-open">导入群组目录</button></div>' +
@@ -259,13 +255,13 @@
       '<div class="panel-h">群组功能介绍</div>' +
       '<p class="small muted" style="margin:0 0 14px">创建或加入群组，可以和同伴一起练习指定题库，并查看每天练习数据。输入群号即可加入已存在的群组。</p>' +
       '<div class="panel-h">功能与权限说明</div>' +
-      '<div class="table-wrap"><table class="tbl"><thead><tr><th>项目</th><th>本机模式</th></tr></thead><tbody>' +
+      '<div class="table-wrap"><table class="tbl"><thead><tr><th>项目</th><th>说明</th></tr></thead><tbody>' +
       '<tr><td>创建群组</td><td>不限制，群号自动分配</td></tr>' +
       '<tr><td>成员来源</td><td>本机身份（可切换模拟多人）</td></tr>' +
       '<tr><td>加入方式</td><td>不限制 / 审核后加入 / 口令</td></tr>' +
       '<tr><td>练习数据</td><td>本机浏览器保存，按账号隔离</td></tr>' +
       '</tbody></table></div>' +
-      '<div class="notice-bar info" style="margin-top:14px">本机模式不连接任何群组服务端。跨设备共享群号：一方「导出群组目录」，另一方「导入群组目录」后即可按群号搜索加入。</div>' +
+      '<div class="notice-bar info" style="margin-top:14px">跨设备共享群号：一方「导出群组目录」，另一方「导入群组目录」后即可按群号搜索加入。</div>' +
       '</div></div>';
     if (S.drawer) {
       h += '<div class="grp-drawer-mask" data-action="grp-search-close"></div>' +
@@ -334,7 +330,7 @@
     }
     if (a === 'grp-toggle') { const k = el.dataset.key; S.open[k] = !S.open[k]; render(); return true; }
     if (a === 'grp-detail') { S.detail = S.detail === id ? '' : id; render(); return true; }
-    if (a === 'grp-identity-save') { const me = switchIdentity(v('grp-identity-name')); S.detail = ''; render(); toast('已切换身份：' + me.name); return true; }
+    /* v1.11.0：身份选择按钮已移除，身份由账号自动确定 */
     if (a === 'grp-approve' || a === 'grp-reject') { const r = (a === 'grp-approve' ? approve : reject)(id, uid); toast(r.msg, r.ok ? 'ok' : 'err'); render(); return true; }
     if (a === 'grp-leave') { if (!global.confirm || global.confirm('确定退出该群组？')) { const r = leave(id); toast(r.msg, r.ok ? 'ok' : 'err'); S.detail = ''; render(); } return true; }
     if (a === 'grp-dissolve') { if (!global.confirm || global.confirm('确定解散该群组？成员记录会一并删除。')) { const r = dissolve(id); toast(r.msg, r.ok ? 'ok' : 'err'); S.detail = ''; render(); } return true; }

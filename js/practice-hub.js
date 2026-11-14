@@ -298,8 +298,7 @@
   P.hubReview = function () {
     let h = crumb('查看练习数据');
     h += reviewCardHTML();
-    /* v1.4.3：卡片显示「暂无练习记录」时，直接给出三源汇总与来源诊断，不再让用户面对一张空图 */
-    if (Quiz.recordsDiag && Quiz.recordsDiag.html) h += Quiz.recordsDiag.html();
+    /* v1.11.0：按需求移除「答题记录·来源诊断与汇总」「全部答题记录」「逐题作答明细（实时）」展示 */
     h += '<div class="row" style="justify-content:center;gap:10px;margin-top:14px">' +
       '<button class="btn btn-sm" data-action="hub-sequential">再练一次</button>' +
       '<a class="btn btn-sm" href="' + hubHref() + '">继续练习</a></div>';
@@ -451,7 +450,7 @@
         '<label><input type="radio" name="hub-pick" value="' + o[0] + '" data-action="hub-exam-cfg" data-key="pickOrder"' +
         (cfg.pickOrder === o[0] ? ' checked' : '') + '> ' + o[1] + '</label>').join('') + '</div></div>';
     h += '</div><div class="notice-bar info">说明：<br>1. 模拟考试为随机从各题型中抽取试题进行自我测试。<br>' +
-      '2. 本机版仅使用本机题库，题数不足时按实际可用题量组卷。<br>' +
+      '2. 仅使用当前账号题库，题数不足时按实际可用题量组卷。<br>' +
       '3. 多选题得分模式与每题分值可在上方调整，交卷后自动保存设置。<br>' +
       '4. 配置好试题和分值后，系统将自动保存设置。</div>';
     h += '<div class="row" style="justify-content:center;gap:10px"><a class="btn" href="' + hubHref() + '">放弃记录</a>' +
@@ -614,8 +613,8 @@
         launch(bankQuestions().filter(q => (w[q.question_id] || 0) >= 2).map(q => q.question_id)); break;
       }
       case 'hub-material': global.location.hash = '#/downloads'; break;
-      case 'hub-share': toast('分享为在线模式功能，本机版暂不提供', 'ok'); break;
-      case 'hub-app': toast('APP 做题为在线模式功能，本机版暂不提供', 'ok'); break;
+      case 'hub-share': toast('分享暂未开放', 'ok'); break;
+      case 'hub-app': toast('APP 做题暂未开放', 'ok'); break;
       case 'hub-chapter-start': {
         const cat = el.dataset.cat || '';
         launch(idsOf(q => !cat || (q.category || []).join('/') === cat || cat === '未分章节' && !(q.category || []).length));

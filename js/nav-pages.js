@@ -1,5 +1,5 @@
 /* v0.9 新导航页面：一级/二级导航对应的布局页。
-   纯增量：所有既有 Quiz.pages 路由不改不删；账户中心为在线模式预留，仅布局、控件禁用、不写入任何示例数据。 */
+   纯增量：所有既有 Quiz.pages 路由不改不删；账户中心为暂未开放，仅布局、控件禁用、不写入任何示例数据。 */
 (function (global) {
   const Quiz = global.Quiz;
   const P = Quiz.pages, util = Quiz.util, store = Quiz.store;
@@ -44,7 +44,7 @@
   }
   function pct(n) { return (Math.round((Number(n) || 0) * 10) / 10) + '%'; }
   function reserve(text) {
-    return '<div class="reserve">ⓘ ' + e(text || '该模块为在线模式预留功能，此次更新仅优化布局，未启用任何业务功能。') + '</div>';
+    return '<div class="reserve">ⓘ ' + e(text || '该模块为暂未开放功能，此次更新仅优化布局，未启用任何业务功能。') + '</div>';
   }
   function emptyBox(text, ico) {
     return '<div class="empty"><div class="ico">' + (ico || '▤') + '</div><div>' + e(text || '暂无数据') + '</div></div>';
@@ -113,7 +113,7 @@
     if (BO) list = BO.sorted(list);
     let h = '<div class="blank-panel pad-0">';
     /* v1.5.1：工具栏拆成「动作」与「筛选」两行，避免筛选下拉被挤成占满整行 */
-    h += '<div class="toolbar bo-toolbar bo-toolbar-top" style="padding:14px 16px 0">' +
+    h += '<div class="toolbar bo-toolbar bo-toolbar-top" style="padding:14px 16px">' +
       '<a class="btn btn-sm btn-c-blue" href="#/import">上传题库</a>' +
       '<button class="btn btn-sm btn-c-cyan" data-action="ai-go-settings">AI 解析</button>' +
       '<a class="btn btn-sm btn-c-orange" href="#/bank">人工录入</a>' +
@@ -126,12 +126,12 @@
           '<button data-action="bo-merge">合并题库</button>' +
           '<button data-action="bo-share">批量分享我的题库</button>' +
         '</div></div>' +
-      '</div>';
-    h += '<div class="toolbar bo-toolbar bo-toolbar-bottom" style="padding:0 16px">' +
       '<span class="grow"></span>' +
       '<input type="text" class="tb-search" id="mybanks-kw" placeholder="输入您想搜索的题库名称" value="' + e(kw) + '">' +
       '<button class="btn btn-sm" data-action="nav-search-go" data-target="mybanks">⌕</button>' +
-      '</div>';
+      '</div>' +
+      '<div class="bo-toolbar-bottom" style="display:none" aria-hidden="true"></div>';
+
     h += '<div style="padding:0 16px 16px">';
     const rows = list.map((b, i) => {
       const id = b.bank_id || b.id || '';
@@ -142,7 +142,7 @@
         BO ? BO.nameCell(b) : e(b.name),
         '<span class="small muted">' + fmt(b.created_at) + '</span>',
         String(n),
-        '<button class="btn-link" data-action="nav-todo" title="在线模式预留">↗</button>',
+        '<button class="btn-link" data-action="nav-todo" title="暂未开放">↗</button>',
         ops([goLink('bank', '添加试题'), goLink('bank', '试题管理'),
              '<a class="btn-link" href="#/bankGrid?bank=' + e(id) + '">编辑试题</a>',
              '<a class="btn-link" href="#/practiceHub?bank=' + e(id) + '">练习</a>']) +
@@ -153,7 +153,7 @@
       kw ? '没有匹配的题库' : '还没有题库，可在「文档导入」上传或在「题库管理」新建', 'bo-tbl');
     h += '</div></div>';
     h += '<a class="bo-fab" href="#/import">↑ 上传题库</a>';
-    h += '<div class="small faint" style="margin-top:10px">列表数据取自本机题库；截图中出现的题库名称、题目数量均为示例，未写入本项目。</div>';
+    h += '';
     return h;
   };
 
@@ -179,7 +179,7 @@
       ops([goLink('wrong', '查看'), goLink('practice', '练习'), todo('导出'), todo('删除', true)])
     ]);
     h += tbl(['<input type="checkbox" data-action="nav-check-all" data-target="nb-ck">', '编号', '题库名称', '作者', '错题数量', '操作'], rows, '还没有错题记录');
-    h += '</div><div class="small faint" style="margin-top:10px">按题库汇总本机错题数量；作者列在本机模式下统一显示为「本地用户」。</div>';
+    h += '</div><div class="small faint" style="margin-top:10px">按题库汇总错题数量。</div>';
     return h;
   };
 
@@ -230,35 +230,11 @@
       '<div class="bar-labels">' + labels.map(l => '<span>' + l + '</span>').join('') + '</div>';
   }
   /* v1.4.2：记录为空时直接告诉用户「数据在哪」，而不是只显示一张空表 */
-  function recordsDiagnosis(days) {
-    /* v1.4.3：全站统一诊断（含三源汇总表），模块缺失时回退到本页原有诊断 */
-    if (Quiz.recordsDiag && Quiz.recordsDiag.html) return Quiz.recordsDiag.html();
-    const s = store.state();
-    let host = '本地文件';
-    try { host = (global.location && global.location.host) || '本地文件'; } catch (x) {}
-    const rt = (store.runtime && store.runtime.get && store.runtime.get()) || null;
-    const running = rt && Array.isArray(rt.answers) ? rt.answers.filter(Boolean).length : 0;
-    const exams = (Quiz.hubPages && Quiz.hubPages.examHistory) ? Quiz.hubPages.examHistory().length : 0;
-    const fallback = store.isFallback && store.isFallback();
-    const row = (k, v, warn) => '<div class="rec-diag-k">' + k + '</div><div class="rec-diag-v' + (warn ? ' warn' : '') + '">' + v + '</div>';
-    const noData = !days.length && !s.sessions.length && !s.records.length;
-    let h = '<section class="card rec-diag"><h2>做题记录来源诊断</h2>' +
-      '<div class="rec-diag-grid">' +
-      row('当前站点', e(host)) +
-      row('存储模式', fallback ? '内存模式（刷新即丢，请立即导出备份）' : '正常（localStorage）', fallback) +
-      row('已归档会话 / 作答明细', s.sessions.length + ' 次 / ' + s.records.length + ' 条', !s.sessions.length) +
-      row('进行中练习 / 模拟考试', running + ' 题 / ' + exams + ' 场') +
-      '</div>';
-    if (noData) h += '<div class="notice-bar warn">当前没有做题记录。常见原因：① 未点「交卷」（未交卷只计进行中，退出选「放弃」不归档）；② 换了浏览器 / 域名 / 设备（数据按 origin 隔离）；③ 清空过数据或无痕模式。</div>';
-    h += '<p class="small muted" style="margin:10px 0 0">数据保存在<b>当前浏览器 + 当前域名</b>的本地存储，按账号隔离。跨设备请用「数据与设置 → 导出 JSON / 导入备份」迁移。</p>' +
-      '<div class="row" style="margin-top:10px"><button class="btn btn-sm" data-action="export-json">导出当前数据</button>' +
-      '<a class="btn btn-sm" href="#/records">查看逐题明细</a></div></section>';
-    return h;
-  }
+  /* v1.11.0：来源诊断卡已按需求移除 */
   P.practiceRecords = function () {
     const days = daily(), tab = S.tabs.practiceRecords;
+    /* v1.11.0：按需求移除「答题记录·来源诊断与汇总」「全部答题记录」「逐题作答明细（实时）」展示 */
     let h = tabs('practiceRecords', [['data', '练习数据'], ['rank', '排行榜'], ['total', '累计练习']]);
-    h += recordsDiagnosis(days);
     if (tab === 'data') {
       const today = dayKey(Date.now());
       const t = days.find(x => x.date === today) || {sessions: 0, questions: 0, correct: 0, duration: 0};
@@ -272,16 +248,12 @@
         '<div class="metric"><div class="lb">正确率</div><div class="vl">' + pct(acc) + '</div></div>' +
         '</div></div>' +
         '<div class="blank-panel"><div class="panel-h">最近一周练习题量 <span class="sub">含进行中练习与模拟考试</span></div>' + weekBars(days) + '</div></div>';
-      h += '<div class="blank-panel"><div class="panel-h">练习明细 <span class="sub">按日汇总：已归档会话 / 进行中练习 / 模拟考试</span></div>' +
-        tbl(['日期', '练习次数', '练习题数', '正确率', '练习时长', '操作'],
-          days.map(d => [d.date, String(d.sessions), String(d.questions), pct(d.questions ? d.correct / d.questions * 100 : 0), dur(d.duration), goLink('records', '详情')]),
-          '还没有练习记录') + '</div>';
     } else if (tab === 'rank') {
-      h += '<div class="notice-bar info">排行榜为在线模式下不同用户之间的练习记录对比；当前为纯前端本机模式，无跨用户数据，故列表为空。</div>';
+      h += '<div class="notice-bar info">排行榜展示不同用户之间的练习记录对比；暂无跨用户数据，故列表为空。</div>';
       h += '<div class="blank-panel"><div class="toolbar">' +
         '<button class="btn btn-sm ' + (S.rank === 'today' ? 'btn-c-blue' : '') + '" data-action="nav-rank" data-value="today">今日排行</button>' +
         '<button class="btn btn-sm ' + (S.rank === 'week' ? 'btn-c-blue' : '') + '" data-action="nav-rank" data-value="week">本周排行</button></div>' +
-        tbl(['排名', '用户昵称', '总练习次数', '练习题数', '练习时长'], [], '在线模式开启后展示跨用户排行') + '</div>';
+        tbl(['排名', '用户昵称', '总练习次数', '练习题数', '练习时长'], [], '有跨用户数据后展示排行') + '</div>';
     } else {
       /* v1.4.4：累计口径与按日明细一致，取逐题实时记录，不再重复叠加会话汇总 */
       const totalQ = days.reduce((n, d) => n + (Number(d.questions) || 0), 0);
@@ -289,7 +261,7 @@
       const totalD = days.reduce((n, d) => n + (Number(d.duration) || 0), 0);
       const totalS = days.reduce((n, d) => n + (Number(d.sessions) || 0), 0);
       const bankCount = (store.banks && store.banks() || []).length;
-      h += '<div class="blank-panel"><div class="toolbar"><input type="text" style="max-width:230px" placeholder="输入姓名 / 手机号" disabled><span class="small faint">在线模式下的用户检索</span></div>' +
+      h += '<div class="blank-panel"><div class="toolbar"><input type="text" style="max-width:230px" placeholder="输入姓名 / 手机号" disabled><span class="small faint">用户检索</span></div>' +
         '<div class="section-title">累计练习</div><div class="kv-list">' +
         '<div>累计练习</div><div>' + days.length + ' 天</div>' +
         '<div>练习时长</div><div>' + dur(totalD) + '</div>' +
@@ -399,7 +371,7 @@
       '<label class="check" style="display:block;margin:4px 0"><input type="checkbox" disabled checked> 交卷后允许查看成绩</label>' +
       '</div></div>';
     h += secH('考试封面') + '<div class="row" style="gap:14px"><div class="cover-thumb">▤</div>' +
-      '<div><button class="btn btn-sm" data-action="nav-todo">编辑封面</button><div class="hint" style="margin-top:6px">封面上传为在线模式功能，本机版使用占位图。</div></div></div></div>';
+      '<div><button class="btn btn-sm" data-action="nav-todo">编辑封面</button><div class="hint" style="margin-top:6px">封面上传暂未开放。</div></div></div></div>';
     h += secH('考试须知') + '<div class="notice-bar">⚠ 请在规定时间内完成作答，交卷后将无法修改。 <button class="btn-link" data-action="nav-todo">查看注意事项</button></div>' +
       '<div class="small muted" style="line-height:2">考试说明：' + e(f.desc || '—') + '<br>考试资格：' + e(f.qualify) +
       '<br>考试时间：' + e(f.start || '—') + ' 至 ' + e(f.end || '—') + '<br>登录信息项：姓名、手机号</div></div>';
@@ -410,7 +382,7 @@
     h += secH('考试人数') + '<div class="row" style="max-width:430px"><input type="number" class="num-input" data-exam-field="people" value="' + e(f.people) + '"><span class="small muted">参考考试人数 / 限制考试人数</span>' +
       '<button class="btn btn-sm btn-c-orange" data-action="nav-todo">开始练习</button></div><div class="hint" style="margin-top:8px">单人考试人数：一场考试可以参加考试的人数，即应参考考生人数，包含了已有考生，限制可参加考试的人数。</div></div>';
     h += secH('考试设置') + '<div class="small muted">及格分数 ' + e(f.pass) + ' 分 · 评分设置 · 成绩显示 · 主题背景等 <button class="btn btn-sm btn-c-soft" data-action="exam-step" data-value="1">编辑</button></div></div>';
-    h += secH('附件设置') + '<div class="small muted">考试附件（在线模式） <button class="btn btn-sm btn-c-soft" data-action="nav-todo">云视频</button></div></div>';
+    h += secH('附件设置') + '<div class="small muted">考试附件 <button class="btn btn-sm btn-c-soft" data-action="nav-todo">云视频</button></div></div>';
     h += '<div class="row" style="gap:10px"><button class="btn" data-action="exam-step" data-value="2">← 上一步</button>' +
       '<button class="btn btn-primary" data-action="exam-finish">完成考试创建</button></div>';
     return h;
@@ -427,7 +399,7 @@
     const list = exams().filter(x => !kw || String(x.name || '').indexOf(kw) >= 0);
     let h = '<div class="notice-bar info">✦ 智能生成解析：可围绕试卷解析思路、试题分析、帮助考生巩固知识点、快速掌握。 <button class="btn-link" data-action="ai-go-settings">去看看</button><button class="x" data-action="nav-todo">×</button></div>';
     h += tabs('examHistory', [['list', '考试列表'], ['batchDel', '批量删除考试'], ['batchExport', '批量导出']]);
-    h += '<div class="blank-panel pad-0"><div class="toolbar" style="padding:14px 16px 0">' +
+    h += '<div class="blank-panel pad-0"><div class="toolbar" style="padding:14px 16px">' +
       '<a class="btn btn-sm btn-c-blue" href="#/examNew">+ 新增考试</a><span class="grow"></span>' +
       '<input type="text" class="tb-search" id="examhis-kw" placeholder="输入考试名称" value="' + e(kw) + '">' +
       '<button class="btn btn-sm" data-action="nav-search-go" data-target="examHistory">⌕</button></div>';
@@ -444,26 +416,27 @@
     ]);
     h += tbl(['<input type="checkbox" data-action="nav-check-all" data-target="nb-ck">', '编号', '考试名称', '总分', '考试时长', '考试人数', '更新时间', '状态', '操作'], rows,
       '还没有考试，点击「新增考试」创建');
-    h += '</div></div><div class="small faint" style="margin-top:10px">列表数据取自本机已创建考试；截图中的考试名称、人数等均为示例，未写入本项目。</div>';
+    h += '</div></div>';
     return h;
   };
 
   /* ================= 一级预留页 ================= */
   function reservePage(title, desc) {
-    return reserve(title + '为在线模式预留的一级入口，此次更新只优化布局，未设置任何功能。') +
+    return reserve(title + '为暂未开放的一级入口，此次更新只优化布局，未设置任何功能。') +
       '<div class="blank-panel"><div class="panel-h">' + e(title) + '</div>' +
       '<p class="small muted" style="margin:0 0 16px">' + e(desc) + '</p>' +
       '<div class="quick-links"><a href="#/dashboard">← 返回首页</a><a href="#/mybanks">前往题库中心</a><a href="#/examNew">前往考试管理</a></div></div>';
   }
-  P.library = function () { return reservePage('资料库', '预留模块：用于归集本地导入的资料、文档与题库备份。'); };
+  /* v1.11.0：资料库由 js/library.js 覆盖为真实上传 / 预览 / 下载页；此处仅作模块未加载时的兜底 */
+  P.library = function () { return (Quiz.library && Quiz.library.html) ? Quiz.library.html() : reservePage('资料库', '上传与管理学习资料。'); };
   /* v1.6.0：群组功能已启用；模块未加载时仍回退到预留说明，保持向后兼容 */
   P.groups = function () {
     return (Quiz.groups && Quiz.groups.html) ? Quiz.groups.html()
-      : reservePage('我的群组', '在线模式下用于创建/加入群组、共享题库与组织练习。本机版不提供多用户协作。');
+      : reservePage('我的群组', '创建 / 加入群组、共享题库与组织练习。');
   };
 
   /* ================= 账户中心（本地账号 + 密码，其余扩展字段仍预留） ================= */
-  const ACC = '<div class="notice-bar info">本机账号模式：题库、错题、练习记录按账号隔离保存在这台浏览器，不上传服务端。跨设备请用「导出 JSON / 导入备份」迁移。</div>';
+  const ACC = '<div class="notice-bar info">账号数据按账号隔离保存，可在「数据与设置」导出或导入备份。</div>';
   const DIS = 'disabled';
   function dLine(label, control, required) {
     return '<div class="form-line"><div class="fl' + (required ? ' req' : '') + '">' + e(label) + '</div><div class="fc">' + control + '</div></div>';
@@ -518,8 +491,9 @@
       '</tr></thead></table></div>' + emptyBox('还没有数据', '▤') + '</div>';
   };
   P.messages = function () {
-    return ACC + '<div class="blank-panel"><div class="panel-h">消息通知</div>' +
-      '<div class="msg-item"><div class="mico">✦</div><div><div class="mt">消息通知</div><div class="md">在线模式下的系统消息与任务通知将显示在此处</div><div class="mtime">本机模式暂无消息</div></div></div></div>';
+    /* v1.11.0：由 js/admin.js 覆盖为管理员通知列表；此处保留兜底 */
+    if (Quiz.admin && Quiz.admin.messagesHtml) return Quiz.admin.messagesHtml();
+    return '<div class="blank-panel"><div class="panel-h">消息通知</div><div class="empty"><span class="e-icon">▤</span>暂无通知</div></div>';
   };
   P.downloads = function () {
     return ACC + '<div class="blank-panel pad-0">' +
