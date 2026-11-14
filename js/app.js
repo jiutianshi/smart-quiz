@@ -64,7 +64,7 @@
       stats: {range:'all', category:'', type:''},
       /* v1.12.0：tab 记住文档导入页当前标签；上传记录存独立键，不进账号业务 KEYS */
       imp: {policy:'skip', skipErrors:'0', text:'', report:null, review:[], batchId:'', bankId: Quiz.DEFAULT_BANK_ID,
-        tab:'doc', lastFileName:'', lastFileSize:0},
+        lastFileName:'', lastFileSize:0},
       bank: {kw:'', category:'', type:'', difficulty:'', status:'', tag:'', page:1, bankId: Quiz.DEFAULT_BANK_ID},
       /* v1.3.3 文档导入校验页：只存上次选择的源文件（内存），不进备份 */
       importReview: {file:null, fileName:''},
@@ -186,7 +186,7 @@
                  order:p.order, feedback_mode:p.feedback_mode, partial_mode:p.partial_mode,
                  allow_partial_with_wrong:p.allow_partial_with_wrong, quota_mode:p.quota_mode,
                  quota:Object.assign({}, p.quota), shuffle_options:p.shuffle_options, auto_advance:p.auto_advance},
-      imp: {policy:app.ui.imp.policy, skipErrors:app.ui.imp.skipErrors, tab:app.ui.imp.tab}
+      imp: {policy:app.ui.imp.policy, skipErrors:app.ui.imp.skipErrors}
     });
   }
   app.savePrefs = savePrefs;
@@ -701,9 +701,8 @@
       app.ui.imp.text = text;
       app.ui.importReview.file = file;
       app.ui.importReview.fileName = file.name;
-      /* v1.12.0：解析完成后自动切到「智能导入」，让用户立即看到输入区内容 */
-      app.ui.imp.tab = 'smart';
-      const rt = $('imp-tab-smart'); if (rt) rt.checked = true;
+      /* v1.12.1：单页布局，解析完成后把焦点交还输入区 */
+      try { const ti = $('imp-text'); if (ti && ti.focus) ti.focus(); } catch (x) {}
       if (named === 'text') toast('已载入 ' + file.name + '，请核对后点击「校验并导入」', 'ok');
       else toast('已解析 ' + file.name + '（' + Math.max(0, text.split('\n').length - 1) + ' 行数据）' + (note ? '；' + note : '') + '，请核对后点击「校验并导入」', 'ok');
     } catch (e) {
@@ -1270,11 +1269,6 @@
   });
 
   document.addEventListener('change', function (e) {
-    /* v1.12.0：文档导入页标签 radio 自行切换，不重绘，避免丢失已粘贴的内容 */
-    if (e.target && e.target.name === 'imp-tab') {
-      app.ui.imp.tab = (e.target.dataset && e.target.dataset.tab) || 'doc';
-      return;
-    }
     /* 选项选中态高亮（不改变任何判分逻辑） */
     if (e.target && e.target.name === 'answer') {
       try {
